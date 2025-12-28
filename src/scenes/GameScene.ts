@@ -12,16 +12,18 @@ import type { Player, WinResult } from '../types';
  */
 export default class GameScene extends Phaser.Scene {
     private gameLogic!: GameLogic;
-    private hud!: GameHUD;
+    private lastWinResult: WinResult | null = null;
 
     private isDragging: boolean = false;
     private startDragPoint: Phaser.Math.Vector2 | null = null;
 
+    private gridGraphics!: Phaser.GameObjects.Graphics;
     private graphicsX!: Phaser.GameObjects.Graphics;
     private graphicsO!: Phaser.GameObjects.Graphics;
-    private gridGraphics!: Phaser.GameObjects.Graphics;
-    private winLineGraphics: Phaser.GameObjects.Graphics | null = null;
-    private lastWinResult: WinResult | null = null;
+    private winLineGraphics!: Phaser.GameObjects.Graphics;
+
+    private hud!: GameHUD;
+    private uiCamera!: Phaser.Cameras.Scene2D.Camera;
 
     constructor() {
         super('game');
@@ -32,29 +34,38 @@ export default class GameScene extends Phaser.Scene {
      * Sets up the grid, UI, input handling, and camera.
      */
     create() {
-        // Reset state that may persist across scene restarts
-        this.winLineGraphics = null;
-        this.lastWinResult = null;
-
-        // Apply current theme colors
-        this.cameras.main.setBackgroundColor(ColorConfig.GAME_BG);
-
+        // Initialize game logic
         this.gameLogic = new GameLogic({
             rows: GridConfig.GRID_SIZE,
             cols: GridConfig.GRID_SIZE,
             winSequence: GameConfig.WIN_CONDITION_COUNT
         });
+        // Reset state that may persist across scene restarts
+        this.lastWinResult = null;
 
-        this.createGrid();
+        // Apply current theme colors
+        this.cameras.main.setBackgroundColor(ColorConfig.GAME_BG);
 
-        // Initialize HUD with restart and theme toggle callbacks
-        this.hud = new GameHUD(this, () => this.resetGame(), () => this.handleToggleTheme());
-
-        // Start game state
-        this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
-
+        // Create all game graphics objects
+        this.gridGraphics = this.add.graphics();
         this.graphicsX = this.add.graphics();
         this.graphicsO = this.add.graphics();
+        this.winLineGraphics = this.add.graphics();
+        this.drawGridLines();
+
+        // Initialize HUD with restart, theme toggle, and zoom callbacks
+        this.hud = new GameHUD(this, () => this.resetGame(), () => this.handleToggleTheme(), (delta) => this.handleZoom(delta));
+        this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
+
+        // Create UI camera that won't be affected by zoom
+        this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+        this.uiCamera.setScroll(0, 0);
+
+        // Main camera ignores HUD elements, UI camera only shows HUD
+        const hudElements = this.hud.getElements();
+        this.cameras.main.ignore(hudElements);
+        this.uiCamera.ignore(this.children.list.filter(child => !hudElements.includes(child)));
+
         this.cameras.main.setBounds(0, 0, GridConfig.CANVAS_WIDTH, GridConfig.CANVAS_HEIGHT);
         this.setupInputHandling();
         this.centerCamera();
@@ -88,6 +99,17 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Handles zoom: applies zoom delta to the main camera.
+     * Clamps the zoom level to min/max bounds.
+     * @param delta The zoom delta to apply (positive to zoom in, negative to zoom out).
+     */
+    private handleZoom(delta: number) {
+        const currentZoom = this.cameras.main.zoom;
+        const newZoom = Phaser.Math.Clamp(currentZoom + delta, GameConfig.ZOOM_MIN, GameConfig.ZOOM_MAX);
+        this.cameras.main.setZoom(newZoom);
+    }
+
+    /**
      * Redraws all placed symbols with current theme colors.
      */
     private redrawSymbols() {
@@ -101,14 +123,6 @@ export default class GameScene extends Phaser.Scene {
                 }
             }
         }
-    }
-
-    /**
-     * Creates the grid graphics object and draws the initial grid lines.
-     */
-    private createGrid() {
-        this.gridGraphics = this.add.graphics();
-        this.drawGridLines();
     }
 
     /**
@@ -192,12 +206,8 @@ export default class GameScene extends Phaser.Scene {
      * @param end The ending grid coordinates of the winning line.
      */
     private drawWinningLine(start: { x: number, y: number }, end: { x: number, y: number }) {
-        // Create or clear the win line graphics
-        if (!this.winLineGraphics) {
-            this.winLineGraphics = this.add.graphics();
-        }
         this.winLineGraphics.clear();
-        this.winLineGraphics.setAlpha(GraphicsConfig.WIN_LINE_ALPHA); // Global alpha to avoid overlap artifacts
+        this.winLineGraphics.setAlpha(GraphicsConfig.WIN_LINE_ALPHA);
         const thickness = GraphicsConfig.WIN_LINE_THICKNESS;
 
         this.winLineGraphics.lineStyle(thickness, ColorConfig.WIN, 1);
@@ -252,6 +262,16 @@ export default class GameScene extends Phaser.Scene {
 
         const restartKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R);
         restartKey?.on('down', () => this.resetGame());
+
+        // Zoom in with + key, zoom out with - key (both regular and numpad)
+        const zoomInKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.PLUS);
+        zoomInKey?.on('down', () => this.handleZoom(GameConfig.ZOOM_STEP));
+        const zoomInNumpad = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_ADD);
+        zoomInNumpad?.on('down', () => this.handleZoom(GameConfig.ZOOM_STEP));
+        const zoomOutKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS);
+        zoomOutKey?.on('down', () => this.handleZoom(-GameConfig.ZOOM_STEP));
+        const zoomOutNumpad = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_SUBTRACT);
+        zoomOutNumpad?.on('down', () => this.handleZoom(-GameConfig.ZOOM_STEP));
     }
 
     /**

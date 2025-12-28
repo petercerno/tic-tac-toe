@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ColorConfig, GridConfig, UIConfig, isDarkMode } from '../constants';
+import { ColorConfig, GridConfig, UIConfig, GameConfig, isDarkMode } from '../constants';
 import type { Player, WinResult } from '../types';
 
 /**
@@ -14,19 +14,24 @@ export class GameHUD {
     private statusText!: Phaser.GameObjects.Text;
     private restartButtonContainer!: Phaser.GameObjects.Container;
     private themeButtonContainer!: Phaser.GameObjects.Container;
+    private zoomInButtonContainer!: Phaser.GameObjects.Container;
+    private zoomOutButtonContainer!: Phaser.GameObjects.Container;
     private onRestart: () => void;
     private onToggleTheme: () => void;
+    private onZoom: (delta: number) => void;
 
     /**
      * Initializes the Game HUD.
      * @param scene The Phaser scene to add UI elements to.
      * @param onRestart Callback function to execute when restart is clicked.
      * @param onToggleTheme Callback function to execute when theme toggle is clicked.
+     * @param onZoom Callback function to execute when zoom buttons are clicked.
      */
-    constructor(scene: Phaser.Scene, onRestart: () => void, onToggleTheme: () => void) {
+    constructor(scene: Phaser.Scene, onRestart: () => void, onToggleTheme: () => void, onZoom: (delta: number) => void) {
         this.scene = scene;
         this.onRestart = onRestart;
         this.onToggleTheme = onToggleTheme;
+        this.onZoom = onZoom;
         this.create();
     }
 
@@ -38,6 +43,22 @@ export class GameHUD {
         this.createStatusText();
         this.createRestartButton();
         this.createThemeButton();
+        this.createZoomButtons();
+    }
+
+    /**
+     * Returns all HUD game objects for camera configuration.
+     * @returns Array of all HUD game objects.
+     */
+    public getElements(): Phaser.GameObjects.GameObject[] {
+        return [
+            this.uiBackground,
+            this.statusText,
+            this.restartButtonContainer,
+            this.themeButtonContainer,
+            this.zoomInButtonContainer,
+            this.zoomOutButtonContainer
+        ];
     }
 
     /**
@@ -100,24 +121,30 @@ export class GameHUD {
      * @param y The y position of the button.
      * @param label The text label for the button.
      * @param onClick Callback function when button is clicked.
+     * @param width Optional button width (defaults to BUTTON_WIDTH).
+     * @param height Optional button height (defaults to BUTTON_HEIGHT).
      * @returns The button container.
      */
-    private createButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-        const buttonWidth = UIConfig.BUTTON_WIDTH;
-        const buttonHeight = UIConfig.BUTTON_HEIGHT;
-
+    private createButton(
+        x: number,
+        y: number,
+        label: string,
+        onClick: () => void,
+        width: number = UIConfig.BUTTON_WIDTH,
+        height: number = UIConfig.BUTTON_HEIGHT
+    ): Phaser.GameObjects.Container {
         const container = this.scene.add.container(x, y);
         container.setScrollFactor(0);
         container.setDepth(2);
 
         const background = this.scene.add.graphics();
         background.fillStyle(ColorConfig.BUTTON_BG, 1);
-        background.fillRoundedRect(0, 0, buttonWidth, buttonHeight, UIConfig.BUTTON_BORDER_RADIUS);
+        background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
 
-        const hitArea = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
+        const hitArea = new Phaser.Geom.Rectangle(0, 0, width, height);
         container.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
-        const text = this.scene.add.text(buttonWidth / 2, buttonHeight / 2, label, {
+        const text = this.scene.add.text(width / 2, height / 2, label, {
             fontSize: UIConfig.BUTTON_TEXT_FONT_SIZE,
             color: ColorConfig.BUTTON_TEXT_STR
         });
@@ -126,20 +153,22 @@ export class GameHUD {
         container.add([background, text]);
         container.setData('background', background);
         container.setData('text', text);
+        container.setData('width', width);
+        container.setData('height', height);
 
         container.on('pointerdown', onClick);
 
         container.on('pointerover', () => {
             background.clear();
             background.fillStyle(ColorConfig.BUTTON_HOVER, 1);
-            background.fillRoundedRect(0, 0, buttonWidth, buttonHeight, UIConfig.BUTTON_BORDER_RADIUS);
+            background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
             this.scene.input.setDefaultCursor('pointer');
         });
 
         container.on('pointerout', () => {
             background.clear();
             background.fillStyle(ColorConfig.BUTTON_BG, 1);
-            background.fillRoundedRect(0, 0, buttonWidth, buttonHeight, UIConfig.BUTTON_BORDER_RADIUS);
+            background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
             this.scene.input.setDefaultCursor('default');
         });
 
@@ -147,10 +176,35 @@ export class GameHUD {
     }
 
     /**
+     * Calculates the x position for the restart button.
+     * @param screenWidth The current screen width.
+     */
+    private getRestartButtonX(screenWidth: number): number {
+        return screenWidth - UIConfig.BUTTON_WIDTH - UIConfig.BUTTON_MARGIN_RIGHT;
+    }
+
+    /**
+     * Calculates the x position for the theme button.
+     * @param screenWidth The current screen width.
+     */
+    private getThemeButtonX(screenWidth: number): number {
+        return screenWidth - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2);
+    }
+
+    /**
+     * Calculates the base x position for zoom buttons.
+     * @param screenWidth The current screen width.
+     */
+    private getZoomButtonsBaseX(screenWidth: number): number {
+        return screenWidth - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2)
+            - UIConfig.BUTTON_MARGIN_RIGHT - (UIConfig.ZOOM_BUTTON_SIZE * 2) - UIConfig.ZOOM_BUTTON_GAP;
+    }
+
+    /**
      * Creates the interactive restart button.
      */
     private createRestartButton() {
-        const x = this.scene.scale.width - UIConfig.BUTTON_WIDTH - UIConfig.BUTTON_MARGIN_RIGHT;
+        const x = this.getRestartButtonX(this.scene.scale.width);
         const y = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
         this.restartButtonContainer = this.createButton(x, y, 'Restart', () => this.onRestart());
     }
@@ -159,10 +213,26 @@ export class GameHUD {
      * Creates the interactive theme toggle button.
      */
     private createThemeButton() {
-        const x = this.scene.scale.width - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2);
+        const x = this.getThemeButtonX(this.scene.scale.width);
         const y = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
         const label = isDarkMode() ? '☀️ Light' : '🌙 Dark';
         this.themeButtonContainer = this.createButton(x, y, label, () => this.onToggleTheme());
+    }
+
+    /**
+     * Creates the zoom in and zoom out buttons.
+     */
+    private createZoomButtons() {
+        const y = (GridConfig.UI_HEIGHT - UIConfig.ZOOM_BUTTON_SIZE) / 2;
+        const baseX = this.getZoomButtonsBaseX(this.scene.scale.width);
+        const size = UIConfig.ZOOM_BUTTON_SIZE;
+
+        // Zoom out button (-)
+        this.zoomOutButtonContainer = this.createButton(baseX, y, '-', () => this.onZoom(-GameConfig.ZOOM_STEP), size, size);
+
+        // Zoom in button (+)
+        const zoomInX = baseX + size + UIConfig.ZOOM_BUTTON_GAP;
+        this.zoomInButtonContainer = this.createButton(zoomInX, y, '+', () => this.onZoom(GameConfig.ZOOM_STEP), size, size);
     }
 
     /**
@@ -172,29 +242,23 @@ export class GameHUD {
     public refresh() {
         this.updateUIBackground();
 
-        // Update both button containers
-        [this.restartButtonContainer, this.themeButtonContainer].forEach(container => {
-            if (container) {
-                const background = container.getData('background') as Phaser.GameObjects.Graphics;
-                const text = container.getData('text') as Phaser.GameObjects.Text;
+        // Update all button containers
+        const allButtons = [this.restartButtonContainer, this.themeButtonContainer, this.zoomInButtonContainer, this.zoomOutButtonContainer];
+        for (const container of allButtons) {
+            const background = container.getData('background') as Phaser.GameObjects.Graphics;
+            const text = container.getData('text') as Phaser.GameObjects.Text;
+            const width = container.getData('width') as number;
+            const height = container.getData('height') as number;
 
-                if (background) {
-                    background.clear();
-                    background.fillStyle(ColorConfig.BUTTON_BG, 1);
-                    background.fillRoundedRect(0, 0, UIConfig.BUTTON_WIDTH, UIConfig.BUTTON_HEIGHT, UIConfig.BUTTON_BORDER_RADIUS);
-                }
-
-                if (text) {
-                    text.setColor(ColorConfig.BUTTON_TEXT_STR);
-                }
-            }
-        });
+            background.clear();
+            background.fillStyle(ColorConfig.BUTTON_BG, 1);
+            background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
+            text.setColor(ColorConfig.BUTTON_TEXT_STR);
+        }
 
         // Update theme button text to show correct icon/label
         const themeText = this.themeButtonContainer.getData('text') as Phaser.GameObjects.Text;
-        if (themeText) {
-            themeText.setText(isDarkMode() ? '☀️ Light' : '🌙 Dark');
-        }
+        themeText.setText(isDarkMode() ? '☀️ Light' : '🌙 Dark');
     }
 
     /**
@@ -203,11 +267,10 @@ export class GameHUD {
      */
     public handleResize(width: number) {
         this.updateUIBackground();
-        if (this.restartButtonContainer) {
-            this.restartButtonContainer.x = width - UIConfig.BUTTON_WIDTH - UIConfig.BUTTON_MARGIN_RIGHT;
-        }
-        if (this.themeButtonContainer) {
-            this.themeButtonContainer.x = width - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2);
-        }
+        this.restartButtonContainer.x = this.getRestartButtonX(width);
+        this.themeButtonContainer.x = this.getThemeButtonX(width);
+        const baseX = this.getZoomButtonsBaseX(width);
+        this.zoomOutButtonContainer.x = baseX;
+        this.zoomInButtonContainer.x = baseX + UIConfig.ZOOM_BUTTON_SIZE + UIConfig.ZOOM_BUTTON_GAP;
     }
 }

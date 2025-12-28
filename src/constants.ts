@@ -134,7 +134,10 @@ export const ColorConfig = {
  */
 export const GameConfig = {
     DRAG_THRESHOLD: 10,
-    WIN_CONDITION_COUNT: 5
+    WIN_CONDITION_COUNT: 5,
+    ZOOM_MIN: 0.8,
+    ZOOM_MAX: 2.0,
+    ZOOM_STEP: 0.2
 };
 
 /**
@@ -148,7 +151,9 @@ export const UIConfig = {
     BUTTON_HEIGHT: 35,
     BUTTON_MARGIN_RIGHT: 20,
     BUTTON_BORDER_RADIUS: 8,
-    BUTTON_TEXT_FONT_SIZE: '16px'
+    BUTTON_TEXT_FONT_SIZE: '16px',
+    ZOOM_BUTTON_SIZE: 35,
+    ZOOM_BUTTON_GAP: 5
 };
 
 /**

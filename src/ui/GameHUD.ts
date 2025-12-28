@@ -3,36 +3,113 @@ import { ColorConfig, GridConfig, UIConfig, GameConfig, isDarkMode } from '../co
 import type { Player, WinResult } from '../types';
 
 /**
+ * Callback functions for HUD interactions.
+ */
+export interface HUDCallbacks {
+    onRestart: () => void;
+    onToggleTheme: () => void;
+    onZoom: (delta: number) => void;
+    onUndo: () => void;
+}
+
+/**
+ * Configuration for a single button including its position calculation and properties.
+ */
+interface ButtonConfig {
+    id: string;
+    label: string | (() => string);
+    onClick: () => void;
+    getX: (screenWidth: number) => number;
+    width: number;
+    height: number;
+}
+
+/**
  * Manages the Head-Up Display (HUD) for the game.
  * Displays the current player turn, win status, and interactive buttons
- * for restarting the game and toggling the theme.
+ * for undo, zoom controls, theme toggle, and restart.
  * All UI elements are fixed to the viewport and respond to window resizing.
  */
 export class GameHUD {
     private scene: Phaser.Scene;
+    private callbacks: HUDCallbacks;
     private uiBackground!: Phaser.GameObjects.Graphics;
     private statusText!: Phaser.GameObjects.Text;
-    private restartButtonContainer!: Phaser.GameObjects.Container;
-    private themeButtonContainer!: Phaser.GameObjects.Container;
-    private zoomInButtonContainer!: Phaser.GameObjects.Container;
-    private zoomOutButtonContainer!: Phaser.GameObjects.Container;
-    private onRestart: () => void;
-    private onToggleTheme: () => void;
-    private onZoom: (delta: number) => void;
+    private buttons: Map<string, Phaser.GameObjects.Container> = new Map();
+    private buttonConfigs: ButtonConfig[] = [];
+
+    // Common Y positions for buttons
+    private readonly buttonY = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
+    private readonly smallButtonY = (GridConfig.UI_HEIGHT - UIConfig.SMALL_BUTTON_SIZE) / 2;
 
     /**
      * Initializes the Game HUD.
      * @param scene The Phaser scene to add UI elements to.
-     * @param onRestart Callback function to execute when restart is clicked.
-     * @param onToggleTheme Callback function to execute when theme toggle is clicked.
-     * @param onZoom Callback function to execute when zoom buttons are clicked.
+     * @param callbacks Object containing all callback functions for HUD interactions.
      */
-    constructor(scene: Phaser.Scene, onRestart: () => void, onToggleTheme: () => void, onZoom: (delta: number) => void) {
+    constructor(scene: Phaser.Scene, callbacks: HUDCallbacks) {
         this.scene = scene;
-        this.onRestart = onRestart;
-        this.onToggleTheme = onToggleTheme;
-        this.onZoom = onZoom;
+        this.callbacks = callbacks;
+        this.initButtonConfigs();
         this.create();
+    }
+
+    /**
+     * Initializes the button configurations with position calculations and properties.
+     * Buttons are defined from right to left: Restart, Theme, Zoom In, Zoom Out, Back.
+     */
+    private initButtonConfigs() {
+        const { BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_MARGIN_RIGHT, SMALL_BUTTON_SIZE, SMALL_BUTTON_GAP } = UIConfig;
+
+        // Position calculations (from right to left)
+        const getRestartX = (w: number) => w - BUTTON_WIDTH - BUTTON_MARGIN_RIGHT;
+        const getThemeX = (w: number) => getRestartX(w) - BUTTON_MARGIN_RIGHT - BUTTON_WIDTH;
+        const getZoomInX = (w: number) => getThemeX(w) - BUTTON_MARGIN_RIGHT - SMALL_BUTTON_SIZE;
+        const getZoomOutX = (w: number) => getZoomInX(w) - SMALL_BUTTON_GAP - SMALL_BUTTON_SIZE;
+        const getBackX = (w: number) => getZoomOutX(w) - BUTTON_MARGIN_RIGHT - SMALL_BUTTON_SIZE;
+
+        this.buttonConfigs = [
+            {
+                id: 'restart',
+                label: 'Restart',
+                onClick: () => this.callbacks.onRestart(),
+                getX: getRestartX,
+                width: BUTTON_WIDTH,
+                height: BUTTON_HEIGHT
+            },
+            {
+                id: 'theme',
+                label: () => isDarkMode() ? '☀️ Light' : '🌙 Dark',
+                onClick: () => this.callbacks.onToggleTheme(),
+                getX: getThemeX,
+                width: BUTTON_WIDTH,
+                height: BUTTON_HEIGHT
+            },
+            {
+                id: 'zoomIn',
+                label: '+',
+                onClick: () => this.callbacks.onZoom(GameConfig.ZOOM_STEP),
+                getX: getZoomInX,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
+            },
+            {
+                id: 'zoomOut',
+                label: '-',
+                onClick: () => this.callbacks.onZoom(-GameConfig.ZOOM_STEP),
+                getX: getZoomOutX,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
+            },
+            {
+                id: 'back',
+                label: '↩',
+                onClick: () => this.callbacks.onUndo(),
+                getX: getBackX,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
+            }
+        ];
     }
 
     /**
@@ -41,9 +118,22 @@ export class GameHUD {
     private create() {
         this.createUIBackground();
         this.createStatusText();
-        this.createRestartButton();
-        this.createThemeButton();
-        this.createZoomButtons();
+        this.createAllButtons();
+    }
+
+    /**
+     * Creates all buttons from the button configurations.
+     */
+    private createAllButtons() {
+        const screenWidth = this.scene.scale.width;
+
+        for (const config of this.buttonConfigs) {
+            const x = config.getX(screenWidth);
+            const y = config.height === UIConfig.BUTTON_HEIGHT ? this.buttonY : this.smallButtonY;
+            const label = typeof config.label === 'function' ? config.label() : config.label;
+            const container = this.createButton(x, y, label, config.onClick, config.width, config.height);
+            this.buttons.set(config.id, container);
+        }
     }
 
     /**
@@ -54,10 +144,7 @@ export class GameHUD {
         return [
             this.uiBackground,
             this.statusText,
-            this.restartButtonContainer,
-            this.themeButtonContainer,
-            this.zoomInButtonContainer,
-            this.zoomOutButtonContainer
+            ...this.buttons.values()
         ];
     }
 
@@ -121,8 +208,8 @@ export class GameHUD {
      * @param y The y position of the button.
      * @param label The text label for the button.
      * @param onClick Callback function when button is clicked.
-     * @param width Optional button width (defaults to BUTTON_WIDTH).
-     * @param height Optional button height (defaults to BUTTON_HEIGHT).
+     * @param width Button width.
+     * @param height Button height.
      * @returns The button container.
      */
     private createButton(
@@ -130,8 +217,8 @@ export class GameHUD {
         y: number,
         label: string,
         onClick: () => void,
-        width: number = UIConfig.BUTTON_WIDTH,
-        height: number = UIConfig.BUTTON_HEIGHT
+        width: number,
+        height: number
     ): Phaser.GameObjects.Container {
         const container = this.scene.add.container(x, y);
         container.setScrollFactor(0);
@@ -176,66 +263,6 @@ export class GameHUD {
     }
 
     /**
-     * Calculates the x position for the restart button.
-     * @param screenWidth The current screen width.
-     */
-    private getRestartButtonX(screenWidth: number): number {
-        return screenWidth - UIConfig.BUTTON_WIDTH - UIConfig.BUTTON_MARGIN_RIGHT;
-    }
-
-    /**
-     * Calculates the x position for the theme button.
-     * @param screenWidth The current screen width.
-     */
-    private getThemeButtonX(screenWidth: number): number {
-        return screenWidth - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2);
-    }
-
-    /**
-     * Calculates the base x position for zoom buttons.
-     * @param screenWidth The current screen width.
-     */
-    private getZoomButtonsBaseX(screenWidth: number): number {
-        return screenWidth - (UIConfig.BUTTON_WIDTH * 2) - (UIConfig.BUTTON_MARGIN_RIGHT * 2)
-            - UIConfig.BUTTON_MARGIN_RIGHT - (UIConfig.ZOOM_BUTTON_SIZE * 2) - UIConfig.ZOOM_BUTTON_GAP;
-    }
-
-    /**
-     * Creates the interactive restart button.
-     */
-    private createRestartButton() {
-        const x = this.getRestartButtonX(this.scene.scale.width);
-        const y = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
-        this.restartButtonContainer = this.createButton(x, y, 'Restart', () => this.onRestart());
-    }
-
-    /**
-     * Creates the interactive theme toggle button.
-     */
-    private createThemeButton() {
-        const x = this.getThemeButtonX(this.scene.scale.width);
-        const y = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
-        const label = isDarkMode() ? '☀️ Light' : '🌙 Dark';
-        this.themeButtonContainer = this.createButton(x, y, label, () => this.onToggleTheme());
-    }
-
-    /**
-     * Creates the zoom in and zoom out buttons.
-     */
-    private createZoomButtons() {
-        const y = (GridConfig.UI_HEIGHT - UIConfig.ZOOM_BUTTON_SIZE) / 2;
-        const baseX = this.getZoomButtonsBaseX(this.scene.scale.width);
-        const size = UIConfig.ZOOM_BUTTON_SIZE;
-
-        // Zoom out button (-)
-        this.zoomOutButtonContainer = this.createButton(baseX, y, '-', () => this.onZoom(-GameConfig.ZOOM_STEP), size, size);
-
-        // Zoom in button (+)
-        const zoomInX = baseX + size + UIConfig.ZOOM_BUTTON_GAP;
-        this.zoomInButtonContainer = this.createButton(zoomInX, y, '+', () => this.onZoom(GameConfig.ZOOM_STEP), size, size);
-    }
-
-    /**
      * Refreshes all HUD elements to reflect the current theme colors.
      * Called after theme toggle to update UI without recreating elements.
      */
@@ -243,8 +270,7 @@ export class GameHUD {
         this.updateUIBackground();
 
         // Update all button containers
-        const allButtons = [this.restartButtonContainer, this.themeButtonContainer, this.zoomInButtonContainer, this.zoomOutButtonContainer];
-        for (const container of allButtons) {
+        for (const [id, container] of this.buttons) {
             const background = container.getData('background') as Phaser.GameObjects.Graphics;
             const text = container.getData('text') as Phaser.GameObjects.Text;
             const width = container.getData('width') as number;
@@ -254,11 +280,13 @@ export class GameHUD {
             background.fillStyle(ColorConfig.BUTTON_BG, 1);
             background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
             text.setColor(ColorConfig.BUTTON_TEXT_STR);
-        }
 
-        // Update theme button text to show correct icon/label
-        const themeText = this.themeButtonContainer.getData('text') as Phaser.GameObjects.Text;
-        themeText.setText(isDarkMode() ? '☀️ Light' : '🌙 Dark');
+            // Update dynamic labels (e.g., theme button)
+            const config = this.buttonConfigs.find(c => c.id === id);
+            if (config && typeof config.label === 'function') {
+                text.setText(config.label());
+            }
+        }
     }
 
     /**
@@ -267,10 +295,13 @@ export class GameHUD {
      */
     public handleResize(width: number) {
         this.updateUIBackground();
-        this.restartButtonContainer.x = this.getRestartButtonX(width);
-        this.themeButtonContainer.x = this.getThemeButtonX(width);
-        const baseX = this.getZoomButtonsBaseX(width);
-        this.zoomOutButtonContainer.x = baseX;
-        this.zoomInButtonContainer.x = baseX + UIConfig.ZOOM_BUTTON_SIZE + UIConfig.ZOOM_BUTTON_GAP;
+
+        // Update all button positions from configs
+        for (const config of this.buttonConfigs) {
+            const container = this.buttons.get(config.id);
+            if (container) {
+                container.x = config.getX(width);
+            }
+        }
     }
 }

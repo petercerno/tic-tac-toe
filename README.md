@@ -7,8 +7,13 @@ A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser
 *   **5-in-a-row Victory Condition**: Traditional Xs and Os, but you need 5 contiguous symbols to win.
 *   **Fixed 30x30 Grid**: A dedicated battlefield for your strategic 5-in-a-row moves.
 *   **Dark/Light Theme Toggle**: Switch between dark and light modes with a single click. Defaults to your system preference.
+*   **Zoom Controls**: Zoom in/out using buttons or keyboard shortcuts.
+*   **Undo Move**: Take back your last move with the undo button.
 *   **Interactive UI**: Responsive camera controls with drag-to-pan and scroll support.
-*   **Keyboard Shortcuts**: Press `R` to restart the game.
+*   **Keyboard Shortcuts**:
+    *   `R` - Restart the game
+    *   `Backspace` - Undo the last move
+    *   `+` / `-` - Zoom in / out
 *   **Modern Stack**: Fast development and building with Vite.
 
 ## Tech Stack

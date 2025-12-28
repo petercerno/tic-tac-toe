@@ -53,8 +53,13 @@ export default class GameScene extends Phaser.Scene {
         this.winLineGraphics = this.add.graphics();
         this.drawGridLines();
 
-        // Initialize HUD with restart, theme toggle, and zoom callbacks
-        this.hud = new GameHUD(this, () => this.resetGame(), () => this.handleToggleTheme(), (delta) => this.handleZoom(delta));
+        // Initialize HUD with callbacks for user interactions
+        this.hud = new GameHUD(this, {
+            onRestart: () => this.resetGame(),
+            onToggleTheme: () => this.handleToggleTheme(),
+            onZoom: (delta) => this.handleZoom(delta),
+            onUndo: () => this.handleUndo()
+        });
         this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
 
         // Create UI camera that won't be affected by zoom
@@ -122,6 +127,24 @@ export default class GameScene extends Phaser.Scene {
                     this.drawSymbol(x, y, cell);
                 }
             }
+        }
+    }
+
+    /**
+     * Handles undo: reverts the last move and updates the display.
+     */
+    private handleUndo() {
+        const undoneMove = this.gameLogic.undoLastMove();
+        if (undoneMove) {
+            // Clear the winning line if the game was won
+            if (this.lastWinResult) {
+                this.winLineGraphics.clear();
+                this.lastWinResult = null;
+            }
+            // Redraw all symbols to reflect the undone move
+            this.redrawSymbols();
+            // Update the turn indicator
+            this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
         }
     }
 
@@ -272,6 +295,10 @@ export default class GameScene extends Phaser.Scene {
         zoomOutKey?.on('down', () => this.handleZoom(-GameConfig.ZOOM_STEP));
         const zoomOutNumpad = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.NUMPAD_SUBTRACT);
         zoomOutNumpad?.on('down', () => this.handleZoom(-GameConfig.ZOOM_STEP));
+
+        // Undo with Backspace key
+        const undoKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.BACKSPACE);
+        undoKey?.on('down', () => this.handleUndo());
     }
 
     /**

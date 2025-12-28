@@ -1,10 +1,17 @@
 import type { Cell, Player, WinResult, GridDimensions } from '../types';
 
+/**
+ * Core game logic for Tic-Tac-Toe.
+ * Manages the game grid, player turns, move history, win detection,
+ * and undo functionality. This class is UI-independent and handles
+ * only the game state and rules.
+ */
 export class GameLogic {
     private grid: Cell[][] = [];
     private dimensions: GridDimensions;
     private currentPlayer: Player = 'X';
     private gameOver: boolean = false;
+    private moveHistory: { x: number, y: number, player: Player }[] = [];
 
     // Static constant for win check directions
     private static readonly WIN_CHECK_DIRECTIONS = [
@@ -37,6 +44,7 @@ export class GameLogic {
         }
         this.currentPlayer = 'X';
         this.gameOver = false;
+        this.moveHistory = [];
     }
 
     /**
@@ -91,6 +99,7 @@ export class GameLogic {
 
         const player = this.currentPlayer;
         this.grid[y][x] = player;
+        this.moveHistory.push({ x, y, player });
 
         const winResult = this.checkWin(x, y, player);
         if (winResult) {
@@ -100,6 +109,39 @@ export class GameLogic {
         }
 
         return { success: true, win: winResult };
+    }
+
+    /**
+     * Checks if there are any moves to undo.
+     * @returns True if at least one move has been made, false otherwise.
+     */
+    public canUndo(): boolean {
+        return this.moveHistory.length > 0;
+    }
+
+    /**
+     * Returns the number of moves made so far.
+     * @returns The number of moves in the history.
+     */
+    public getMoveCount(): number {
+        return this.moveHistory.length;
+    }
+
+    /**
+     * Undoes the last move, restoring the previous game state.
+     * @returns The coordinates of the undone move, or null if no move to undo.
+     */
+    public undoLastMove(): { x: number, y: number } | null {
+        if (this.moveHistory.length === 0) {
+            return null;
+        }
+
+        const lastMove = this.moveHistory.pop()!;
+        this.grid[lastMove.y][lastMove.x] = '';
+        this.currentPlayer = lastMove.player;
+        this.gameOver = false;
+
+        return { x: lastMove.x, y: lastMove.y };
     }
 
     /**

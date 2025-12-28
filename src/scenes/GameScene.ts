@@ -1,9 +1,15 @@
 import Phaser from 'phaser';
-import { GridConfig, ColorConfig, GameConfig, GraphicsConfig } from '../constants';
+import { GridConfig, ColorConfig, GameConfig, GraphicsConfig, toggleTheme } from '../constants';
 import { GameLogic } from '../logic/GameLogic';
 import { GameHUD } from '../ui/GameHUD';
-import type { Player } from '../types';
+import type { Player, WinResult } from '../types';
 
+/**
+ * Main game scene for Tic-Tac-Toe.
+ * Manages the game grid, player symbols, win detection, camera controls,
+ * and theme switching. Coordinates between GameLogic for game state
+ * and GameHUD for user interface elements.
+ */
 export default class GameScene extends Phaser.Scene {
     private gameLogic!: GameLogic;
     private hud!: GameHUD;
@@ -13,6 +19,9 @@ export default class GameScene extends Phaser.Scene {
 
     private graphicsX!: Phaser.GameObjects.Graphics;
     private graphicsO!: Phaser.GameObjects.Graphics;
+    private gridGraphics!: Phaser.GameObjects.Graphics;
+    private winLineGraphics: Phaser.GameObjects.Graphics | null = null;
+    private lastWinResult: WinResult | null = null;
 
     constructor() {
         super('game');
@@ -23,6 +32,13 @@ export default class GameScene extends Phaser.Scene {
      * Sets up the grid, UI, input handling, and camera.
      */
     create() {
+        // Reset state that may persist across scene restarts
+        this.winLineGraphics = null;
+        this.lastWinResult = null;
+
+        // Apply current theme colors
+        this.cameras.main.setBackgroundColor(ColorConfig.GAME_BG);
+
         this.gameLogic = new GameLogic({
             rows: GridConfig.GRID_SIZE,
             cols: GridConfig.GRID_SIZE,
@@ -31,8 +47,8 @@ export default class GameScene extends Phaser.Scene {
 
         this.createGrid();
 
-        // Initialize HUD
-        this.hud = new GameHUD(this, () => this.resetGame());
+        // Initialize HUD with restart and theme toggle callbacks
+        this.hud = new GameHUD(this, () => this.resetGame(), () => this.handleToggleTheme());
 
         // Start game state
         this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
@@ -55,26 +71,66 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Draws the tic-tac-toe grid lines on the screen.
-     * Initializes the internal grid state.
+     * Handles theme toggle: updates ColorConfig and refreshes all visual elements.
+     */
+    private handleToggleTheme() {
+        toggleTheme();
+        this.cameras.main.setBackgroundColor(ColorConfig.GAME_BG);
+        this.drawGridLines();
+        this.redrawSymbols();
+        if (this.lastWinResult) {
+            this.drawWinningLine(this.lastWinResult.start, this.lastWinResult.end);
+            this.hud.showWin(this.lastWinResult);
+        } else {
+            this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
+        }
+        this.hud.refresh();
+    }
+
+    /**
+     * Redraws all placed symbols with current theme colors.
+     */
+    private redrawSymbols() {
+        this.graphicsX.clear();
+        this.graphicsO.clear();
+        for (let x = 0; x < GridConfig.GRID_SIZE; x++) {
+            for (let y = 0; y < GridConfig.GRID_SIZE; y++) {
+                const cell = this.gameLogic.getCell(x, y);
+                if (cell) {
+                    this.drawSymbol(x, y, cell);
+                }
+            }
+        }
+    }
+
+    /**
+     * Creates the grid graphics object and draws the initial grid lines.
      */
     private createGrid() {
-        const graphics = this.add.graphics();
-        graphics.lineStyle(GraphicsConfig.GRID_LINE_WIDTH, ColorConfig.GRID, GraphicsConfig.GRID_ALPHA);
+        this.gridGraphics = this.add.graphics();
+        this.drawGridLines();
+    }
+
+    /**
+     * Draws the grid lines using current theme colors.
+     */
+    private drawGridLines() {
+        this.gridGraphics.clear();
+        this.gridGraphics.lineStyle(GraphicsConfig.GRID_LINE_WIDTH, ColorConfig.GRID, GraphicsConfig.GRID_ALPHA);
 
         // Draw vertical lines
         for (let x = 0; x <= GridConfig.GRID_SIZE; x++) {
-            graphics.moveTo(GridConfig.MARGIN + x * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN);
-            graphics.lineTo(GridConfig.MARGIN + x * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN + GridConfig.GRID_SIZE * GridConfig.CELL_SIZE);
+            this.gridGraphics.moveTo(GridConfig.MARGIN + x * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN);
+            this.gridGraphics.lineTo(GridConfig.MARGIN + x * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN + GridConfig.GRID_SIZE * GridConfig.CELL_SIZE);
         }
 
         // Draw horizontal lines
         for (let y = 0; y <= GridConfig.GRID_SIZE; y++) {
-            graphics.moveTo(GridConfig.MARGIN, GridConfig.TOP_MARGIN + y * GridConfig.CELL_SIZE);
-            graphics.lineTo(GridConfig.MARGIN + GridConfig.GRID_SIZE * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN + y * GridConfig.CELL_SIZE);
+            this.gridGraphics.moveTo(GridConfig.MARGIN, GridConfig.TOP_MARGIN + y * GridConfig.CELL_SIZE);
+            this.gridGraphics.lineTo(GridConfig.MARGIN + GridConfig.GRID_SIZE * GridConfig.CELL_SIZE, GridConfig.TOP_MARGIN + y * GridConfig.CELL_SIZE);
         }
 
-        graphics.strokePath();
+        this.gridGraphics.strokePath();
     }
 
     /**
@@ -99,6 +155,7 @@ export default class GameScene extends Phaser.Scene {
             this.drawSymbol(gridX, gridY, playerSymbol);
 
             if (result.win) {
+                this.lastWinResult = result.win;
                 this.drawWinningLine(result.win.start, result.win.end);
                 this.hud.showWin(result.win);
             } else {
@@ -135,23 +192,27 @@ export default class GameScene extends Phaser.Scene {
      * @param end The ending grid coordinates of the winning line.
      */
     private drawWinningLine(start: { x: number, y: number }, end: { x: number, y: number }) {
-        const graphics = this.add.graphics();
-        graphics.setAlpha(GraphicsConfig.WIN_LINE_ALPHA); // Global alpha to avoid overlap artifacts
+        // Create or clear the win line graphics
+        if (!this.winLineGraphics) {
+            this.winLineGraphics = this.add.graphics();
+        }
+        this.winLineGraphics.clear();
+        this.winLineGraphics.setAlpha(GraphicsConfig.WIN_LINE_ALPHA); // Global alpha to avoid overlap artifacts
         const thickness = GraphicsConfig.WIN_LINE_THICKNESS;
 
-        graphics.lineStyle(thickness, ColorConfig.WIN, 1);
-        graphics.fillStyle(ColorConfig.WIN, 1);
+        this.winLineGraphics.lineStyle(thickness, ColorConfig.WIN, 1);
+        this.winLineGraphics.fillStyle(ColorConfig.WIN, 1);
 
         const { x: startX, y: startY } = this.gridToWorld(start.x, start.y);
         const { x: endX, y: endY } = this.gridToWorld(end.x, end.y);
 
-        graphics.moveTo(startX, startY);
-        graphics.lineTo(endX, endY);
-        graphics.strokePath();
+        this.winLineGraphics.moveTo(startX, startY);
+        this.winLineGraphics.lineTo(endX, endY);
+        this.winLineGraphics.strokePath();
 
         // Add round caps
-        graphics.fillCircle(startX, startY, thickness / 2);
-        graphics.fillCircle(endX, endY, thickness / 2);
+        this.winLineGraphics.fillCircle(startX, startY, thickness / 2);
+        this.winLineGraphics.fillCircle(endX, endY, thickness / 2);
     }
 
     /**

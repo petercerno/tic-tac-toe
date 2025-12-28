@@ -4,7 +4,10 @@
  */
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene';
-import { GridConfig, ColorConfig } from './constants';
+import { GridConfig, ColorConfig, initTheme } from './constants';
+
+// Initialize theme from system preference once at app startup
+initTheme();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

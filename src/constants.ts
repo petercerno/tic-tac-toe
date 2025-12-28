@@ -17,9 +17,9 @@ export const GridConfig = {
 const parseColor = (color: string) => parseInt(color.replace('#', '0x'), 16);
 
 /**
- * Internal color palette definitions.
+ * Dark mode color palette.
  */
-const COLORS = {
+const DARK_COLORS = {
     GAME_BG: '#333333',
     PLAYER_X: '#ffff00',
     PLAYER_O: '#00ffff',
@@ -32,28 +32,101 @@ const COLORS = {
 };
 
 /**
+ * Light mode color palette.
+ */
+const LIGHT_COLORS = {
+    GAME_BG: '#e0e0e0',
+    PLAYER_X: '#cc8800',
+    PLAYER_O: '#0088cc',
+    WIN: '#00aa00',
+    UI_BG: '#ffffff',
+    BUTTON_BG: '#cccccc',
+    BUTTON_HOVER: '#aaaaaa',
+    BUTTON_TEXT: '#333333',
+    GRID: '#333333',
+};
+
+/**
+ * Tracks the current theme state.
+ */
+let _isDarkMode = true;
+
+/**
+ * Returns whether dark mode is currently active.
+ */
+export const isDarkMode = () => _isDarkMode;
+
+/**
+ * Updates the ColorConfig with values from the given palette.
+ */
+const updateColorConfig = (palette: typeof DARK_COLORS) => {
+    ColorConfig.GAME_BG_STR = palette.GAME_BG;
+    ColorConfig.PLAYER_X_STR = palette.PLAYER_X;
+    ColorConfig.PLAYER_O_STR = palette.PLAYER_O;
+    ColorConfig.WIN_STR = palette.WIN;
+    ColorConfig.UI_BG_STR = palette.UI_BG;
+    ColorConfig.BUTTON_BG_STR = palette.BUTTON_BG;
+    ColorConfig.BUTTON_HOVER_STR = palette.BUTTON_HOVER;
+    ColorConfig.BUTTON_TEXT_STR = palette.BUTTON_TEXT;
+    ColorConfig.GRID_STR = palette.GRID;
+
+    ColorConfig.GAME_BG = parseColor(palette.GAME_BG);
+    ColorConfig.PLAYER_X = parseColor(palette.PLAYER_X);
+    ColorConfig.PLAYER_O = parseColor(palette.PLAYER_O);
+    ColorConfig.WIN = parseColor(palette.WIN);
+    ColorConfig.UI_BG = parseColor(palette.UI_BG);
+    ColorConfig.BUTTON_BG = parseColor(palette.BUTTON_BG);
+    ColorConfig.BUTTON_HOVER = parseColor(palette.BUTTON_HOVER);
+    ColorConfig.BUTTON_TEXT = parseColor(palette.BUTTON_TEXT);
+    ColorConfig.GRID = parseColor(palette.GRID);
+};
+
+/**
+ * Initializes the theme based on system preference.
+ * Should be called once at application startup.
+ */
+export const initTheme = () => {
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        _isDarkMode = false;
+        updateColorConfig(LIGHT_COLORS);
+    } else {
+        _isDarkMode = true;
+        updateColorConfig(DARK_COLORS);
+    }
+};
+
+/**
+ * Toggles between dark and light mode, updating ColorConfig accordingly.
+ */
+export const toggleTheme = () => {
+    _isDarkMode = !_isDarkMode;
+    updateColorConfig(_isDarkMode ? DARK_COLORS : LIGHT_COLORS);
+};
+
+/**
  * Exported color configuration, providing both string and hex number formats.
+ * This object is mutable and updated by initTheme() and toggleTheme().
  */
 export const ColorConfig = {
-    GAME_BG_STR: COLORS.GAME_BG,
-    PLAYER_X_STR: COLORS.PLAYER_X,
-    PLAYER_O_STR: COLORS.PLAYER_O,
-    WIN_STR: COLORS.WIN,
-    UI_BG_STR: COLORS.UI_BG,
-    BUTTON_BG_STR: COLORS.BUTTON_BG,
-    BUTTON_HOVER_STR: COLORS.BUTTON_HOVER,
-    BUTTON_TEXT_STR: COLORS.BUTTON_TEXT,
-    GRID_STR: COLORS.GRID,
+    GAME_BG_STR: DARK_COLORS.GAME_BG,
+    PLAYER_X_STR: DARK_COLORS.PLAYER_X,
+    PLAYER_O_STR: DARK_COLORS.PLAYER_O,
+    WIN_STR: DARK_COLORS.WIN,
+    UI_BG_STR: DARK_COLORS.UI_BG,
+    BUTTON_BG_STR: DARK_COLORS.BUTTON_BG,
+    BUTTON_HOVER_STR: DARK_COLORS.BUTTON_HOVER,
+    BUTTON_TEXT_STR: DARK_COLORS.BUTTON_TEXT,
+    GRID_STR: DARK_COLORS.GRID,
 
-    GAME_BG: parseColor(COLORS.GAME_BG),
-    PLAYER_X: parseColor(COLORS.PLAYER_X),
-    PLAYER_O: parseColor(COLORS.PLAYER_O),
-    WIN: parseColor(COLORS.WIN),
-    UI_BG: parseColor(COLORS.UI_BG),
-    BUTTON_BG: parseColor(COLORS.BUTTON_BG),
-    BUTTON_HOVER: parseColor(COLORS.BUTTON_HOVER),
-    BUTTON_TEXT: parseColor(COLORS.BUTTON_TEXT),
-    GRID: parseColor(COLORS.GRID)
+    GAME_BG: parseColor(DARK_COLORS.GAME_BG),
+    PLAYER_X: parseColor(DARK_COLORS.PLAYER_X),
+    PLAYER_O: parseColor(DARK_COLORS.PLAYER_O),
+    WIN: parseColor(DARK_COLORS.WIN),
+    UI_BG: parseColor(DARK_COLORS.UI_BG),
+    BUTTON_BG: parseColor(DARK_COLORS.BUTTON_BG),
+    BUTTON_HOVER: parseColor(DARK_COLORS.BUTTON_HOVER),
+    BUTTON_TEXT: parseColor(DARK_COLORS.BUTTON_TEXT),
+    GRID: parseColor(DARK_COLORS.GRID)
 };
 
 /**

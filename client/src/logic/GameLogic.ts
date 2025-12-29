@@ -1,4 +1,4 @@
-import type { GridPosition, Cell, Player, WinResult, GridDimensions } from '../types';
+import type { GridPosition, Cell, Player, WinResult, GridDimensions, Move } from '../types';
 
 /**
  * Core game logic for Tic-Tac-Toe.
@@ -10,8 +10,8 @@ export class GameLogic {
     private grid: Cell[][] = [];
     private dimensions: GridDimensions;
     private currentPlayer: Player = 'X';
-    private gameOver: boolean = false;
-    private moveHistory: { position: GridPosition, player: Player }[] = [];
+    private moveHistory: Move[] = [];
+    private lastWinResult: WinResult | null = null;
 
     // Static constant for win check directions
     private static readonly WIN_CHECK_DIRECTIONS = [
@@ -20,6 +20,8 @@ export class GameLogic {
         [1, 1],  // Diagonal \
         [1, -1]  // Diagonal /
     ];
+
+    // ==================== Lifecycle ====================
 
     /**
      * Initializes the game logic with the specified dimensions and win condition.
@@ -32,7 +34,7 @@ export class GameLogic {
 
     /**
      * Resets the game state to the initial values.
-     * Clears the grid, sets the current player to 'X', and resets the game over flag.
+     * Clears the grid, sets the current player to 'X', and clears the win result.
      */
     public reset(): void {
         this.grid = [];
@@ -43,9 +45,11 @@ export class GameLogic {
             }
         }
         this.currentPlayer = 'X';
-        this.gameOver = false;
         this.moveHistory = [];
+        this.lastWinResult = null;
     }
+
+    // ==================== Getters ====================
 
     /**
      * Gets the symbol of the player whose turn it currently is.
@@ -56,72 +60,51 @@ export class GameLogic {
     }
 
     /**
-     * Checks if the game has ended.
+     * Gets the result of the last winning move, if any.
+     * @returns The WinResult if the game has been won, null otherwise.
+     */
+    public getWinResult(): WinResult | null {
+        return this.lastWinResult;
+    }
+
+    /**
+     * Checks if the game has ended (a player has won).
      * @returns True if the game is over, false otherwise.
      */
     public isGameOver(): boolean {
-        return this.gameOver;
+        return this.lastWinResult !== null;
     }
 
     /**
-     * Retrieves the content of a specific cell in the grid.
-     * @param position The grid position (column, row).
-     * @returns The cell content ('X', 'O', or ''). Returns '' if coordinates are invalid.
+     * Gets a read-only copy of the move history.
+     * @returns Array of moves made in the game, in order.
      */
-    public getCell(position: GridPosition): Cell {
-        if (!this.isValidCell(position)) {
-            return '';
-        }
-        return this.grid[position.y][position.x];
+    public getMoveHistory(): readonly Move[] {
+        return this.moveHistory;
     }
 
-    /**
-     * Validates if the given coordinates are within the grid boundaries.
-     * @param position The grid position to validate.
-     * @returns True if the coordinates are valid, false otherwise.
-     */
-    public isValidCell(position: GridPosition): boolean {
-        return position.x >= 0 && position.x < this.dimensions.cols && position.y >= 0 && position.y < this.dimensions.rows;
-    }
+    // ==================== Core Actions ====================
 
     /**
      * Attempts to make a move at the given coordinates.
      * @param position The grid position for the move.
-     * @returns An object indicating success and any win result.
+     * @returns True if the move was successful, false otherwise.
      */
-    public makeMove(position: GridPosition): { success: boolean, win: WinResult | null } {
-        if (this.gameOver || !this.isValidCell(position) || this.grid[position.y][position.x] !== '') {
-            return { success: false, win: null };
+    public makeMove(position: GridPosition): boolean {
+        if (this.isGameOver() || !this.isValidCell(position) || this.grid[position.y][position.x] !== '') {
+            return false;
         }
 
         const player = this.currentPlayer;
         this.grid[position.y][position.x] = player;
         this.moveHistory.push({ position, player });
 
-        const winResult = this.checkWin(position, player);
-        if (winResult) {
-            this.gameOver = true;
-        } else {
+        this.lastWinResult = this.checkWin(position, player);
+        if (!this.lastWinResult) {
             this.togglePlayer();
         }
 
-        return { success: true, win: winResult };
-    }
-
-    /**
-     * Checks if there are any moves to undo.
-     * @returns True if at least one move has been made, false otherwise.
-     */
-    public canUndo(): boolean {
-        return this.moveHistory.length > 0;
-    }
-
-    /**
-     * Returns the number of moves made so far.
-     * @returns The number of moves in the history.
-     */
-    public getMoveCount(): number {
-        return this.moveHistory.length;
+        return true;
     }
 
     /**
@@ -136,10 +119,23 @@ export class GameLogic {
         const lastMove = this.moveHistory.pop()!;
         this.grid[lastMove.position.y][lastMove.position.x] = '';
         this.currentPlayer = lastMove.player;
-        this.gameOver = false;
+        this.lastWinResult = null;
 
         return lastMove.position;
     }
+
+    // ==================== Utilities ====================
+
+    /**
+     * Validates if the given coordinates are within the grid boundaries.
+     * @param position The grid position to validate.
+     * @returns True if the coordinates are valid, false otherwise.
+     */
+    public isValidCell(position: GridPosition): boolean {
+        return position.x >= 0 && position.x < this.dimensions.cols && position.y >= 0 && position.y < this.dimensions.rows;
+    }
+
+    // ==================== Private Helpers ====================
 
     /**
      * Switches the current player from 'X' to 'O' or vice versa.
@@ -158,7 +154,6 @@ export class GameLogic {
         for (const [dx, dy] of GameLogic.WIN_CHECK_DIRECTIONS) {
             const positive = this.countConsecutive(position, dx, dy, player);
             const negative = this.countConsecutive(position, -dx, -dy, player);
-
             if (1 + positive.count + negative.count >= this.dimensions.winSequence) {
                 return {
                     player: player,

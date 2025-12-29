@@ -28,6 +28,14 @@ export type Player = 'X' | 'O';
 export type Cell = Player | '';
 
 /**
+ * Represents a single move in the game history.
+ */
+export interface Move {
+    position: GridPosition;
+    player: Player;
+}
+
+/**
  * Represents the result of a winning condition check.
  * Contains the winner, and the start and end coordinates of the winning line.
  */

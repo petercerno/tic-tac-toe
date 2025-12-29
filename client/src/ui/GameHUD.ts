@@ -42,6 +42,8 @@ export class GameHUD {
     private readonly buttonY = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
     private readonly smallButtonY = (GridConfig.UI_HEIGHT - UIConfig.SMALL_BUTTON_SIZE) / 2;
 
+    // ==================== Lifecycle ====================
+
     /**
      * Initializes the Game HUD.
      * @param scene The Phaser scene to add UI elements to.
@@ -121,20 +123,7 @@ export class GameHUD {
         this.createAllButtons();
     }
 
-    /**
-     * Creates all buttons from the button configurations.
-     */
-    private createAllButtons() {
-        const screenWidth = this.scene.scale.width;
-
-        for (const config of this.buttonConfigs) {
-            const x = config.getX(screenWidth);
-            const y = config.height === UIConfig.BUTTON_HEIGHT ? this.buttonY : this.smallButtonY;
-            const label = typeof config.label === 'function' ? config.label() : config.label;
-            const container = this.createButton(x, y, label, config.onClick, config.width, config.height);
-            this.buttons.set(config.id, container);
-        }
-    }
+    // ==================== Public Methods ====================
 
     /**
      * Returns all HUD game objects for camera configuration.
@@ -147,6 +136,8 @@ export class GameHUD {
             ...this.buttons.values()
         ];
     }
+
+    // ==================== UI Creation ====================
 
     /**
      * Creates the background graphics for the UI header.
@@ -200,6 +191,21 @@ export class GameHUD {
     public showWin(winResult: WinResult) {
         this.statusText.setText(`Player ${winResult.player} Wins!`);
         this.statusText.setColor(ColorConfig.WIN_STR);
+    }
+
+    /**
+     * Creates all buttons from the button configurations.
+     */
+    private createAllButtons() {
+        const screenWidth = this.scene.scale.width;
+
+        for (const config of this.buttonConfigs) {
+            const x = config.getX(screenWidth);
+            const y = config.height === UIConfig.BUTTON_HEIGHT ? this.buttonY : this.smallButtonY;
+            const label = typeof config.label === 'function' ? config.label() : config.label;
+            const container = this.createButton(x, y, label, config.onClick, config.width, config.height);
+            this.buttons.set(config.id, container);
+        }
     }
 
     /**
@@ -261,6 +267,8 @@ export class GameHUD {
 
         return container;
     }
+
+    // ==================== UI Updates ====================
 
     /**
      * Refreshes all HUD elements to reflect the current theme colors.

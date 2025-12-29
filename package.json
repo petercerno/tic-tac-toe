@@ -4,15 +4,24 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "dev": "vite client",
+    "build": "tsc -p client/tsconfig.json && vite build client",
+    "preview": "vite preview client",
+    "server:dev": "tsx watch server/src/index.ts",
+    "server:build": "tsc -p server/tsconfig.json",
+    "start": "npm run build && npm run server:build && node server/dist/index.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server:dev\""
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
   },
   "dependencies": {
+    "express": "^5.0.1",
     "phaser": "^3.90.0"
   }
 }

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GridConfig, ColorConfig, GameConfig, GraphicsConfig, toggleTheme } from '../constants';
 import { GameLogic } from '../logic/GameLogic';
 import { GameHUD } from '../ui/GameHUD';
-import type { Player, WinResult } from '../types';
+import type { GridPosition, WorldPosition, Player, WinResult } from '../types';
 
 /**
  * Main game scene for Tic-Tac-Toe.
@@ -122,9 +122,10 @@ export default class GameScene extends Phaser.Scene {
         this.graphicsO.clear();
         for (let x = 0; x < GridConfig.GRID_SIZE; x++) {
             for (let y = 0; y < GridConfig.GRID_SIZE; y++) {
-                const cell = this.gameLogic.getCell(x, y);
+                const position: GridPosition = { x, y };
+                const cell = this.gameLogic.getCell(position);
                 if (cell) {
-                    this.drawSymbol(x, y, cell);
+                    this.drawSymbol(position, cell);
                 }
             }
         }
@@ -183,13 +184,13 @@ export default class GameScene extends Phaser.Scene {
 
         // Adjust pointer coordinates for camera scroll
         const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-        const { x: gridX, y: gridY } = this.worldToGrid(worldPoint.x, worldPoint.y);
-        const result = this.gameLogic.makeMove(gridX, gridY);
+        const gridPosition = this.worldToGrid(worldPoint.x, worldPoint.y);
+        const result = this.gameLogic.makeMove(gridPosition);
 
         if (result.success) {
             // Get the symbol of the player who made the move
-            const playerSymbol = this.gameLogic.getCell(gridX, gridY) as Player;
-            this.drawSymbol(gridX, gridY, playerSymbol);
+            const playerSymbol = this.gameLogic.getCell(gridPosition) as Player;
+            this.drawSymbol(gridPosition, playerSymbol);
 
             if (result.win) {
                 this.lastWinResult = result.win;
@@ -203,23 +204,22 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Draws the player's symbol (X or O) at the specified grid coordinates.
-     * @param x The grid x-coordinate.
-     * @param y The grid y-coordinate.
+     * @param position The grid position to draw at.
      * @param player The player symbol ('X' or 'O').
      */
-    private drawSymbol(x: number, y: number, player: 'X' | 'O') {
-        const { x: centerX, y: centerY } = this.gridToWorld(x, y);
+    private drawSymbol(position: GridPosition, player: Player) {
+        const center = this.gridToWorld(position);
 
         if (player === 'X') {
             this.graphicsX.lineStyle(GraphicsConfig.SYMBOL_LINE_WIDTH, ColorConfig.PLAYER_X, 1);
-            this.graphicsX.moveTo(centerX - GraphicsConfig.SYMBOL_X_SIZE, centerY - GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.lineTo(centerX + GraphicsConfig.SYMBOL_X_SIZE, centerY + GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.moveTo(centerX + GraphicsConfig.SYMBOL_X_SIZE, centerY - GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.lineTo(centerX - GraphicsConfig.SYMBOL_X_SIZE, centerY + GraphicsConfig.SYMBOL_X_SIZE);
+            this.graphicsX.moveTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
+            this.graphicsX.lineTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
+            this.graphicsX.moveTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
+            this.graphicsX.lineTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
             this.graphicsX.strokePath();
         } else {
             this.graphicsO.lineStyle(GraphicsConfig.SYMBOL_LINE_WIDTH, ColorConfig.PLAYER_O, 1);
-            this.graphicsO.strokeCircle(centerX, centerY, GraphicsConfig.SYMBOL_O_RADIUS);
+            this.graphicsO.strokeCircle(center.x, center.y, GraphicsConfig.SYMBOL_O_RADIUS);
         }
     }
 
@@ -228,7 +228,7 @@ export default class GameScene extends Phaser.Scene {
      * @param start The starting grid coordinates of the winning line.
      * @param end The ending grid coordinates of the winning line.
      */
-    private drawWinningLine(start: { x: number, y: number }, end: { x: number, y: number }) {
+    private drawWinningLine(start: GridPosition, end: GridPosition) {
         this.winLineGraphics.clear();
         this.winLineGraphics.setAlpha(GraphicsConfig.WIN_LINE_ALPHA);
         const thickness = GraphicsConfig.WIN_LINE_THICKNESS;
@@ -236,16 +236,16 @@ export default class GameScene extends Phaser.Scene {
         this.winLineGraphics.lineStyle(thickness, ColorConfig.WIN, 1);
         this.winLineGraphics.fillStyle(ColorConfig.WIN, 1);
 
-        const { x: startX, y: startY } = this.gridToWorld(start.x, start.y);
-        const { x: endX, y: endY } = this.gridToWorld(end.x, end.y);
+        const startWorld = this.gridToWorld(start);
+        const endWorld = this.gridToWorld(end);
 
-        this.winLineGraphics.moveTo(startX, startY);
-        this.winLineGraphics.lineTo(endX, endY);
+        this.winLineGraphics.moveTo(startWorld.x, startWorld.y);
+        this.winLineGraphics.lineTo(endWorld.x, endWorld.y);
         this.winLineGraphics.strokePath();
 
         // Add round caps
-        this.winLineGraphics.fillCircle(startX, startY, thickness / 2);
-        this.winLineGraphics.fillCircle(endX, endY, thickness / 2);
+        this.winLineGraphics.fillCircle(startWorld.x, startWorld.y, thickness / 2);
+        this.winLineGraphics.fillCircle(endWorld.x, endWorld.y, thickness / 2);
     }
 
     /**
@@ -330,23 +330,22 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Converts grid coordinates to world coordinates (center of the cell).
-     * @param gridX The grid x-coordinate.
-     * @param gridY The grid y-coordinate.
-     * @returns The world coordinates { x, y }.
+     * @param position The grid position.
+     * @returns The world coordinates in pixels.
      */
-    private gridToWorld(gridX: number, gridY: number): { x: number, y: number } {
-        const x = GridConfig.MARGIN + gridX * GridConfig.CELL_SIZE + GridConfig.CELL_SIZE / 2;
-        const y = GridConfig.TOP_MARGIN + gridY * GridConfig.CELL_SIZE + GridConfig.CELL_SIZE / 2;
+    private gridToWorld(position: GridPosition): WorldPosition {
+        const x = GridConfig.MARGIN + position.x * GridConfig.CELL_SIZE + GridConfig.CELL_SIZE / 2;
+        const y = GridConfig.TOP_MARGIN + position.y * GridConfig.CELL_SIZE + GridConfig.CELL_SIZE / 2;
         return { x, y };
     }
 
     /**
      * Converts world coordinates to grid coordinates.
-     * @param worldX The world x-coordinate.
-     * @param worldY The world y-coordinate.
-     * @returns The grid coordinates { x, y }.
+     * @param worldX The world x-coordinate in pixels.
+     * @param worldY The world y-coordinate in pixels.
+     * @returns The grid cell coordinates.
      */
-    private worldToGrid(worldX: number, worldY: number): { x: number, y: number } {
+    private worldToGrid(worldX: number, worldY: number): GridPosition {
         const startX = GridConfig.MARGIN;
         const startY = GridConfig.TOP_MARGIN;
         const x = Math.floor((worldX - startX) / GridConfig.CELL_SIZE);

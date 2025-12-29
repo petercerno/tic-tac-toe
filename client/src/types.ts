@@ -1,4 +1,22 @@
 /**
+ * Represents a position on the game grid (cell indices).
+ * Values are integers representing row/column indices.
+ */
+export interface GridPosition {
+    x: number;
+    y: number;
+}
+
+/**
+ * Represents a position in world/pixel coordinates.
+ * Values are floating-point numbers representing screen positions.
+ */
+export interface WorldPosition {
+    x: number;
+    y: number;
+}
+
+/**
  * Represents the two possible players in the game: 'X' or 'O'.
  */
 export type Player = 'X' | 'O';
@@ -15,8 +33,8 @@ export type Cell = Player | '';
  */
 export interface WinResult {
     player: Player;
-    start: { x: number, y: number };
-    end: { x: number, y: number };
+    start: GridPosition;
+    end: GridPosition;
 }
 
 /**

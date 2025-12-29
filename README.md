@@ -1,6 +1,6 @@
 # Tic-Tac-Toe (5-in-a-row)
 
-A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser 3, TypeScript, and Vite.
+A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser 3, TypeScript, Vite, Node.js, and Express.
 
 ## Features
 
@@ -16,17 +16,43 @@ A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser
     *   `+` / `-` - Zoom in / out
 *   **Modern Stack**: Fast development and building with Vite.
 
+## Project Structure
+
+```
+tic-tac-toe/
+├── client/          # Phaser 3 game (frontend)
+│   ├── index.html   # HTML entry point
+│   ├── src/
+│   │   ├── main.ts           # Game entry point
+│   │   ├── constants.ts      # Configuration and theming
+│   │   ├── types.ts          # TypeScript type definitions
+│   │   ├── logic/            # Pure game logic (GameLogic.ts)
+│   │   ├── scenes/           # Phaser scenes (GameScene.ts)
+│   │   └── ui/               # UI components (GameHUD.ts)
+│   └── dist/        # Production build output
+├── server/          # Node.js Express backend
+│   ├── src/
+│   │   └── index.ts # Server entry point
+│   └── dist/        # Compiled server output
+└── package.json     # Root package with all scripts
+```
+
 ## Tech Stack
 
+### Frontend
 *   [Phaser 3](https://phaser.io/) - HTML5 Game Framework
 *   [TypeScript](https://www.typescriptlang.org/) - Typed JavaScript
 *   [Vite](https://vitejs.dev/) - Next Generation Frontend Tooling
+
+### Backend
+*   [Node.js](https://nodejs.org/) - JavaScript Runtime
+*   [Express 5](https://expressjs.com/) - Web Framework
 
 ## Getting Started
 
 ### Prerequisites
 
-*   Node.js (v14 or higher recommended)
+*   Node.js (v18 or higher recommended)
 *   npm (comes with Node.js)
 
 ### Installation
@@ -44,30 +70,34 @@ A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser
 
 ## Usage
 
-### Development Server
+### Development
 
-Start the local development server with hot-reload:
+Start the Vite development server with hot-reload:
 
 ```bash
 npm run dev
 ```
 
-Open your browser and navigate to the URL shown in the terminal.
-
-### Build for Production
-
-Build the project for production:
+To run the backend server in watch mode alongside the frontend:
 
 ```bash
-npm run build
+npm run dev:all
 ```
 
-The output will be in the `dist` directory.
+### Production
 
-### Preview Production Build
-
-Preview the production build locally:
+Build and start the production server:
 
 ```bash
-npm run preview
+npm run start
 ```
+
+This builds the client, compiles the server, and starts the Express server serving the static files.
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start Vite dev server for frontend only |
+| `npm run dev:all` | Run frontend and backend concurrently |
+| `npm run start` | Build and start production server |

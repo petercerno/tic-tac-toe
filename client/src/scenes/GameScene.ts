@@ -2,13 +2,16 @@ import Phaser from 'phaser';
 import { GridConfig, ColorConfig, GameConfig, GraphicsConfig, toggleTheme } from '../constants';
 import { GameLogic } from '../logic/GameLogic';
 import { GameHUD } from '../ui/GameHUD';
-import type { GridPosition, WorldPosition, Player } from '../types';
+import { RoomModal } from '../ui/RoomModal';
+import { MultiplayerManager } from '../multiplayer/MultiplayerManager';
+import type { GridPosition, WorldPosition, Player, RoomInfo, GameState } from '../types';
 
 /**
  * Main game scene for Tic-Tac-Toe.
  * Manages the game grid, player symbols, win detection, camera controls,
- * and theme switching. Coordinates between GameLogic for game state
- * and GameHUD for user interface elements.
+ * theme switching, and multiplayer connectivity. Coordinates between
+ * GameLogic for game state, GameHUD for user interface, and
+ * MultiplayerManager for real-time synchronization.
  */
 export default class GameScene extends Phaser.Scene {
     private gameLogic!: GameLogic;
@@ -24,6 +27,9 @@ export default class GameScene extends Phaser.Scene {
     private hud!: GameHUD;
     private uiCamera!: Phaser.Cameras.Scene2D.Camera;
 
+    private multiplayerManager!: MultiplayerManager;
+    private roomModal!: RoomModal;
+
     constructor() {
         super('game');
     }
@@ -32,7 +38,7 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Core Phaser method called after the scene is initialized.
-     * Sets up the game logic, graphics, UI, cameras, and input handling.
+     * Sets up the game logic, graphics, UI, cameras, multiplayer, and input handling.
      */
     create() {
         this.gameLogic = new GameLogic({
@@ -44,6 +50,7 @@ export default class GameScene extends Phaser.Scene {
         this.setupGraphics();
         this.setupHUD();
         this.setupCameras();
+        this.setupMultiplayer();
         this.setupInputHandling();
 
         this.scale.on('resize', this.handleResize, this);
@@ -69,7 +76,9 @@ export default class GameScene extends Phaser.Scene {
             onRestart: () => this.resetGame(),
             onToggleTheme: () => this.handleToggleTheme(),
             onZoom: (delta) => this.handleZoom(delta),
-            onUndo: () => this.handleUndo()
+            onUndo: () => this.handleUndo(),
+            onConnect: () => this.handleShowConnectModal(),
+            onDisconnect: () => this.handleDisconnect()
         });
         this.hud.updateTurn(this.gameLogic.getCurrentPlayer());
     }
@@ -94,21 +103,46 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /**
+     * Initializes multiplayer manager and room modal.
+     */
+    private setupMultiplayer() {
+        this.multiplayerManager = new MultiplayerManager({
+            onConnectionChange: (connected, roomInfo) => this.handleConnectionChange(connected, roomInfo),
+            onStateReceived: (state) => this.handleStateReceived(state),
+            onError: (message) => this.handleMultiplayerError(message),
+            onPlayerLeft: () => this.handlePlayerLeft(),
+            onPlayerJoined: (playerCount) => this.handlePlayerJoined(playerCount),
+            onStateRequested: () => this.handleStateRequested()
+        });
+
+        this.roomModal = new RoomModal({
+            onConnect: (roomName) => this.handleConnect(roomName),
+            onCancel: () => { /* Modal handles its own cleanup */ }
+        });
+    }
+
+    /**
      * Handles cleanup when the scene is shut down.
-     * Removes the resize event listener.
+     * Removes the resize event listener and cleans up multiplayer.
      */
     private shutdown() {
         this.scale.off('resize', this.handleResize, this);
+        this.multiplayerManager?.destroy();
+        this.roomModal?.hide();
     }
 
     // ==================== Action Handlers ====================
 
     /**
      * Resets the game to its initial state.
-     * Restarts the scene.
+     * Clears the board, resets zoom, centers camera, and broadcasts reset to other players.
      */
     private resetGame() {
-        this.scene.restart();
+        this.gameLogic.reset();
+        this.redrawGameState();
+        this.cameras.main.setZoom(1);
+        this.centerCamera();
+        this.broadcastState();
     }
 
     /**
@@ -120,6 +154,7 @@ export default class GameScene extends Phaser.Scene {
         this.drawGridLines();
         this.redrawGameState();
         this.hud.refresh();
+        this.roomModal.refresh();
     }
 
     /**
@@ -135,10 +170,103 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Handles undo: reverts the last move and updates the display.
+     * Broadcasts the updated state to other players.
      */
     private handleUndo() {
         if (this.gameLogic.undoLastMove()) {
             this.redrawGameState();
+            this.broadcastState();
+        }
+    }
+
+    // ==================== Multiplayer Handlers ====================
+
+    /**
+     * Shows the room name modal.
+     */
+    private handleShowConnectModal() {
+        this.roomModal.show();
+    }
+
+    /**
+     * Handles connect button click from modal.
+     */
+    private async handleConnect(roomName: string) {
+        try {
+            await this.multiplayerManager.connect(roomName);
+            this.roomModal.hide();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Connection failed';
+            this.roomModal.showError(message);
+        }
+    }
+
+    /**
+     * Handles disconnect button click.
+     */
+    private handleDisconnect() {
+        this.multiplayerManager.disconnect();
+    }
+
+    /**
+     * Handles connection status changes.
+     */
+    private handleConnectionChange(connected: boolean, roomInfo?: RoomInfo) {
+        this.hud.updateConnectionStatus(connected, roomInfo);
+    }
+
+    /**
+     * Handles receiving game state from another player.
+     */
+    private handleStateReceived(state: GameState) {
+        this.gameLogic.setState(state);
+        this.redrawGameState();
+    }
+
+    /**
+     * Handles multiplayer errors.
+     */
+    private handleMultiplayerError(message: string) {
+        console.error('Multiplayer error:', message);
+        // Could show a toast notification here
+    }
+
+    /**
+     * Handles when another player leaves the room.
+     */
+    private handlePlayerLeft() {
+        // Update connection status to show only one player
+        const roomInfo = this.multiplayerManager.getRoomInfo();
+        if (roomInfo) {
+            this.hud.updateConnectionStatus(true, roomInfo);
+        }
+    }
+
+    /**
+     * Handles when another player joins the room.
+     */
+    private handlePlayerJoined(_playerCount: number) {
+        const roomInfo = this.multiplayerManager.getRoomInfo();
+        if (roomInfo) {
+            this.hud.updateConnectionStatus(true, roomInfo);
+        }
+    }
+
+    /**
+     * Handles when another player requests the current state.
+     * Sends the current game state to the requesting player.
+     */
+    private handleStateRequested() {
+        // Broadcast current state to the new player
+        this.broadcastState();
+    }
+
+    /**
+     * Broadcasts the current game state to other players.
+     */
+    private broadcastState() {
+        if (this.multiplayerManager.isConnected()) {
+            this.multiplayerManager.broadcastState(this.gameLogic.getState());
         }
     }
 
@@ -168,7 +296,7 @@ export default class GameScene extends Phaser.Scene {
 
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
             if (!this.isDragging) {
-                this.handleInput(pointer);
+                this.handleGridClick(pointer);
             }
             this.startDragPoint = null;
             this.isDragging = false;
@@ -197,11 +325,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /**
-     * Handles pointer input for placing marks on the grid.
+     * Handles grid cell clicks for placing marks.
      * Ignores clicks on the UI header or if the game is over.
      * @param pointer The pointer object from Phaser input.
      */
-    private handleInput(pointer: Phaser.Input.Pointer) {
+    private handleGridClick(pointer: Phaser.Input.Pointer) {
         // Ignore inputs on the UI header
         if (pointer.y <= GridConfig.UI_HEIGHT) return;
 
@@ -213,6 +341,7 @@ export default class GameScene extends Phaser.Scene {
 
         if (this.gameLogic.makeMove(gridPosition)) {
             this.redrawGameState();
+            this.broadcastState();
         }
     }
 

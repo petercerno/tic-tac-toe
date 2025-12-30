@@ -56,3 +56,29 @@ export interface GridDimensions {
     /** Number of consecutive symbols required to win. */
     winSequence: number;
 }
+
+/**
+ * Serializable game state for multiplayer synchronization.
+ * Contains all data needed to fully reconstruct the game state.
+ */
+export interface GameState {
+    /** History of all moves made in the game. */
+    moveHistory: Move[];
+    /** The player whose turn it currently is. */
+    currentPlayer: Player;
+    /** The result of the game if won, or null if ongoing. */
+    winResult: WinResult | null;
+}
+
+/**
+ * Information about the current multiplayer room connection.
+ */
+export interface RoomInfo {
+    /** Name of the connected room. */
+    roomName: string;
+    /** Whether this client is the room owner (first to join). */
+    isRoomOwner: boolean;
+    /** Number of players currently in the room. */
+    playerCount: number;
+}
+

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ColorConfig, GridConfig, UIConfig, GameConfig, isDarkMode } from '../constants';
-import type { Player, WinResult } from '../types';
+import type { Player, WinResult, RoomInfo } from '../types';
 
 /**
  * Callback functions for HUD interactions.
@@ -10,6 +10,8 @@ export interface HUDCallbacks {
     onToggleTheme: () => void;
     onZoom: (delta: number) => void;
     onUndo: () => void;
+    onConnect: () => void;
+    onDisconnect: () => void;
 }
 
 /**
@@ -26,8 +28,8 @@ interface ButtonConfig {
 
 /**
  * Manages the Head-Up Display (HUD) for the game.
- * Displays the current player turn, win status, and interactive buttons
- * for undo, zoom controls, theme toggle, and restart.
+ * Displays the current player turn, win status, connection status, and interactive buttons
+ * for undo, zoom controls, theme toggle, connect/disconnect, and restart.
  * All UI elements are fixed to the viewport and respond to window resizing.
  */
 export class GameHUD {
@@ -35,11 +37,12 @@ export class GameHUD {
     private callbacks: HUDCallbacks;
     private uiBackground!: Phaser.GameObjects.Graphics;
     private statusText!: Phaser.GameObjects.Text;
+    private connectionText!: Phaser.GameObjects.Text;
     private buttons: Map<string, Phaser.GameObjects.Container> = new Map();
     private buttonConfigs: ButtonConfig[] = [];
+    private isConnected: boolean = false;
 
-    // Common Y positions for buttons
-    private readonly buttonY = (GridConfig.UI_HEIGHT - UIConfig.BUTTON_HEIGHT) / 2;
+    // Y position for small buttons
     private readonly smallButtonY = (GridConfig.UI_HEIGHT - UIConfig.SMALL_BUTTON_SIZE) / 2;
 
     // ==================== Lifecycle ====================
@@ -58,40 +61,55 @@ export class GameHUD {
 
     /**
      * Initializes the button configurations with position calculations and properties.
-     * Buttons are defined from right to left: Restart, Theme, Zoom In, Zoom Out, Back.
+     * Buttons are defined from right to left: Restart, Connect, Theme, Zoom In, Zoom Out, Back.
      */
     private initButtonConfigs() {
-        const { BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_MARGIN_RIGHT, SMALL_BUTTON_SIZE, SMALL_BUTTON_GAP } = UIConfig;
+        const { BUTTON_MARGIN_RIGHT, SMALL_BUTTON_SIZE, SMALL_BUTTON_GAP } = UIConfig;
 
-        // Position calculations (from right to left)
-        const getRestartX = (w: number) => w - BUTTON_WIDTH - BUTTON_MARGIN_RIGHT;
-        const getThemeX = (w: number) => getRestartX(w) - BUTTON_MARGIN_RIGHT - BUTTON_WIDTH;
-        const getZoomInX = (w: number) => getThemeX(w) - BUTTON_MARGIN_RIGHT - SMALL_BUTTON_SIZE;
-        const getZoomOutX = (w: number) => getZoomInX(w) - SMALL_BUTTON_GAP - SMALL_BUTTON_SIZE;
-        const getBackX = (w: number) => getZoomOutX(w) - BUTTON_MARGIN_RIGHT - SMALL_BUTTON_SIZE;
+        // Pre-computed offsets from the right edge for each button position.
+        // This avoids nested function calls during resize and improves performance.
+        const btnSize = SMALL_BUTTON_SIZE;
+        const gap = SMALL_BUTTON_GAP;
+        const margin = BUTTON_MARGIN_RIGHT;
+
+        // Calculate cumulative offsets from right edge (right to left layout)
+        const restartOffset = btnSize + margin;
+        const connectOffset = restartOffset + gap + btnSize;
+        const themeOffset = connectOffset + margin + btnSize;
+        const zoomInOffset = themeOffset + margin + btnSize;
+        const zoomOutOffset = zoomInOffset + gap + btnSize;
+        const backOffset = zoomOutOffset + margin + btnSize;
 
         this.buttonConfigs = [
             {
                 id: 'restart',
-                label: 'Restart',
+                label: '⏻',
                 onClick: () => this.callbacks.onRestart(),
-                getX: getRestartX,
-                width: BUTTON_WIDTH,
-                height: BUTTON_HEIGHT
+                getX: (w: number) => w - restartOffset,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
             },
             {
                 id: 'theme',
-                label: () => isDarkMode() ? '☀️ Light' : '🌙 Dark',
+                label: () => isDarkMode() ? '☼' : '☾',
                 onClick: () => this.callbacks.onToggleTheme(),
-                getX: getThemeX,
-                width: BUTTON_WIDTH,
-                height: BUTTON_HEIGHT
+                getX: (w: number) => w - themeOffset,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
+            },
+            {
+                id: 'connect',
+                label: () => this.isConnected ? '⊘' : '⚡︎',
+                onClick: () => this.isConnected ? this.callbacks.onDisconnect() : this.callbacks.onConnect(),
+                getX: (w: number) => w - connectOffset,
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE
             },
             {
                 id: 'zoomIn',
                 label: '+',
                 onClick: () => this.callbacks.onZoom(GameConfig.ZOOM_STEP),
-                getX: getZoomInX,
+                getX: (w: number) => w - zoomInOffset,
                 width: SMALL_BUTTON_SIZE,
                 height: SMALL_BUTTON_SIZE
             },
@@ -99,15 +117,15 @@ export class GameHUD {
                 id: 'zoomOut',
                 label: '-',
                 onClick: () => this.callbacks.onZoom(-GameConfig.ZOOM_STEP),
-                getX: getZoomOutX,
+                getX: (w: number) => w - zoomOutOffset,
                 width: SMALL_BUTTON_SIZE,
                 height: SMALL_BUTTON_SIZE
             },
             {
                 id: 'back',
-                label: '↩',
+                label: '↺',
                 onClick: () => this.callbacks.onUndo(),
-                getX: getBackX,
+                getX: (w: number) => w - backOffset,
                 width: SMALL_BUTTON_SIZE,
                 height: SMALL_BUTTON_SIZE
             }
@@ -120,6 +138,7 @@ export class GameHUD {
     private create() {
         this.createUIBackground();
         this.createStatusText();
+        this.createConnectionText();
         this.createAllButtons();
     }
 
@@ -133,46 +152,9 @@ export class GameHUD {
         return [
             this.uiBackground,
             this.statusText,
+            this.connectionText,
             ...this.buttons.values()
         ];
-    }
-
-    // ==================== UI Creation ====================
-
-    /**
-     * Creates the background graphics for the UI header.
-     */
-    private createUIBackground() {
-        this.uiBackground = this.scene.add.graphics();
-        this.uiBackground.setScrollFactor(0);
-        this.uiBackground.setDepth(1); // Above grid
-        this.updateUIBackground();
-    }
-
-    /**
-     * Updates the UI background dimensions based on the current screen size.
-     */
-    public updateUIBackground() {
-        const width = this.scene.scale.width;
-        this.uiBackground.clear();
-        this.uiBackground.fillStyle(ColorConfig.UI_BG, UIConfig.UI_BG_ALPHA);
-        this.uiBackground.fillRect(0, 0, width, GridConfig.UI_HEIGHT);
-    }
-
-    /**
-     * Creates the text object displaying the current player's turn.
-     */
-    private createStatusText() {
-        const initialColor = ColorConfig.PLAYER_X_STR;
-        this.statusText = this.scene.add.text(
-            GridConfig.MARGIN + UIConfig.STATUS_TEXT_OFFSET_X,
-            GridConfig.UI_HEIGHT / 2,
-            'Player X',
-            { fontSize: UIConfig.STATUS_TEXT_FONT_SIZE, color: initialColor }
-        );
-        this.statusText.setOrigin(0, 0.5);
-        this.statusText.setScrollFactor(0);
-        this.statusText.setDepth(2); // Above background
     }
 
     /**
@@ -194,6 +176,80 @@ export class GameHUD {
     }
 
     /**
+     * Updates the connection status display.
+     * @param connected Whether currently connected to a room.
+     * @param roomInfo Optional room information.
+     */
+    public updateConnectionStatus(connected: boolean, roomInfo?: RoomInfo): void {
+        this.isConnected = connected;
+
+        // Update connection text
+        if (connected && roomInfo) {
+            const playerInfo = roomInfo.playerCount === 2 ? '👥' : '👤';
+            this.connectionText.setText(`${playerInfo} Room: ${roomInfo.roomName}`);
+            this.connectionText.setColor('#4CAF50');
+        } else {
+            this.connectionText.setText('');
+        }
+
+        // Update connect button label
+        this.updateButtonLabel('connect');
+    }
+
+    /**
+     * Updates the UI background dimensions based on the current screen size.
+     */
+    public updateUIBackground() {
+        const width = this.scene.scale.width;
+        this.uiBackground.clear();
+        this.uiBackground.fillStyle(ColorConfig.UI_BG, UIConfig.UI_BG_ALPHA);
+        this.uiBackground.fillRect(0, 0, width, GridConfig.UI_HEIGHT);
+    }
+
+    // ==================== Private UI Creation ====================
+
+    /**
+     * Creates the background graphics for the UI header.
+     */
+    private createUIBackground() {
+        this.uiBackground = this.scene.add.graphics();
+        this.uiBackground.setScrollFactor(0);
+        this.uiBackground.setDepth(1); // Above grid
+        this.updateUIBackground();
+    }
+
+    /**
+     * Creates the text object displaying the current player's turn.
+     */
+    private createStatusText() {
+        const initialColor = ColorConfig.PLAYER_X_STR;
+        this.statusText = this.scene.add.text(
+            GridConfig.MARGIN + UIConfig.STATUS_TEXT_OFFSET_X,
+            GridConfig.UI_HEIGHT / 2 - 10,
+            'Player X',
+            { fontSize: UIConfig.STATUS_TEXT_FONT_SIZE, color: initialColor }
+        );
+        this.statusText.setOrigin(0, 0.5);
+        this.statusText.setScrollFactor(0);
+        this.statusText.setDepth(2); // Above background
+    }
+
+    /**
+     * Creates the text object displaying the connection status.
+     */
+    private createConnectionText() {
+        this.connectionText = this.scene.add.text(
+            GridConfig.MARGIN + UIConfig.STATUS_TEXT_OFFSET_X,
+            GridConfig.UI_HEIGHT / 2 + 12,
+            '',
+            { fontSize: '14px', color: '#4CAF50' }
+        );
+        this.connectionText.setOrigin(0, 0.5);
+        this.connectionText.setScrollFactor(0);
+        this.connectionText.setDepth(2);
+    }
+
+    /**
      * Creates all buttons from the button configurations.
      */
     private createAllButtons() {
@@ -201,9 +257,8 @@ export class GameHUD {
 
         for (const config of this.buttonConfigs) {
             const x = config.getX(screenWidth);
-            const y = config.height === UIConfig.BUTTON_HEIGHT ? this.buttonY : this.smallButtonY;
             const label = typeof config.label === 'function' ? config.label() : config.label;
-            const container = this.createButton(x, y, label, config.onClick, config.width, config.height);
+            const container = this.createButton(x, this.smallButtonY, label, config.onClick, config.width, config.height);
             this.buttons.set(config.id, container);
         }
     }
@@ -268,6 +323,18 @@ export class GameHUD {
         return container;
     }
 
+    /**
+     * Updates a specific button's label.
+     */
+    private updateButtonLabel(buttonId: string): void {
+        const container = this.buttons.get(buttonId);
+        const config = this.buttonConfigs.find(c => c.id === buttonId);
+        if (container && config && typeof config.label === 'function') {
+            const text = container.getData('text') as Phaser.GameObjects.Text;
+            text.setText(config.label());
+        }
+    }
+
     // ==================== UI Updates ====================
 
     /**
@@ -289,7 +356,7 @@ export class GameHUD {
             background.fillRoundedRect(0, 0, width, height, UIConfig.BUTTON_BORDER_RADIUS);
             text.setColor(ColorConfig.BUTTON_TEXT_STR);
 
-            // Update dynamic labels (e.g., theme button)
+            // Update dynamic labels (e.g., theme button, connect button)
             const config = this.buttonConfigs.find(c => c.id === id);
             if (config && typeof config.label === 'function') {
                 text.setText(config.label());

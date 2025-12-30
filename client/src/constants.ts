@@ -113,28 +113,32 @@ export const toggleTheme = () => {
 /**
  * Exported color configuration, providing both string and hex number formats.
  * This object is mutable and updated by initTheme() and toggleTheme().
+ * Initial values are set by initTheme() on application startup.
  */
 export const ColorConfig = {
-    GAME_BG_STR: DARK_COLORS.GAME_BG,
-    PLAYER_X_STR: DARK_COLORS.PLAYER_X,
-    PLAYER_O_STR: DARK_COLORS.PLAYER_O,
-    WIN_STR: DARK_COLORS.WIN,
-    UI_BG_STR: DARK_COLORS.UI_BG,
-    BUTTON_BG_STR: DARK_COLORS.BUTTON_BG,
-    BUTTON_HOVER_STR: DARK_COLORS.BUTTON_HOVER,
-    BUTTON_TEXT_STR: DARK_COLORS.BUTTON_TEXT,
-    GRID_STR: DARK_COLORS.GRID,
+    GAME_BG_STR: '',
+    PLAYER_X_STR: '',
+    PLAYER_O_STR: '',
+    WIN_STR: '',
+    UI_BG_STR: '',
+    BUTTON_BG_STR: '',
+    BUTTON_HOVER_STR: '',
+    BUTTON_TEXT_STR: '',
+    GRID_STR: '',
 
-    GAME_BG: parseColor(DARK_COLORS.GAME_BG),
-    PLAYER_X: parseColor(DARK_COLORS.PLAYER_X),
-    PLAYER_O: parseColor(DARK_COLORS.PLAYER_O),
-    WIN: parseColor(DARK_COLORS.WIN),
-    UI_BG: parseColor(DARK_COLORS.UI_BG),
-    BUTTON_BG: parseColor(DARK_COLORS.BUTTON_BG),
-    BUTTON_HOVER: parseColor(DARK_COLORS.BUTTON_HOVER),
-    BUTTON_TEXT: parseColor(DARK_COLORS.BUTTON_TEXT),
-    GRID: parseColor(DARK_COLORS.GRID)
+    GAME_BG: 0,
+    PLAYER_X: 0,
+    PLAYER_O: 0,
+    WIN: 0,
+    UI_BG: 0,
+    BUTTON_BG: 0,
+    BUTTON_HOVER: 0,
+    BUTTON_TEXT: 0,
+    GRID: 0
 };
+
+// Initialize with default dark mode colors for type safety before initTheme() is called
+updateColorConfig(DARK_COLORS);
 
 /**
  * General game rules and settings.
@@ -162,17 +166,13 @@ export const UIConfig = {
     STATUS_TEXT_OFFSET_X: 10,
     /** Font size for the status text. */
     STATUS_TEXT_FONT_SIZE: '20px',
-    /** Width of standard buttons in pixels. */
-    BUTTON_WIDTH: 100,
-    /** Height of standard buttons in pixels. */
-    BUTTON_HEIGHT: 35,
     /** Right margin between buttons in pixels. */
     BUTTON_MARGIN_RIGHT: 20,
     /** Border radius for rounded button corners. */
     BUTTON_BORDER_RADIUS: 8,
     /** Font size for button labels. */
     BUTTON_TEXT_FONT_SIZE: '16px',
-    /** Size (width and height) of small square buttons (zoom, undo). */
+    /** Size (width and height) of all HUD buttons. */
     SMALL_BUTTON_SIZE: 35,
     /** Gap between adjacent small buttons. */
     SMALL_BUTTON_GAP: 5
@@ -196,4 +196,14 @@ export const GraphicsConfig = {
     WIN_LINE_ALPHA: 0.5,
     /** Opacity of the grid lines (0 to 1). */
     GRID_ALPHA: 0.5
+};
+
+/**
+ * Configuration for multiplayer functionality.
+ */
+export const MultiplayerConfig = {
+    /** WebSocket server URL. In development, Vite proxies to the Express server. */
+    SERVER_URL: 'http://localhost:3000',
+    /** Pattern for valid room names (letters, numbers, and hyphens only). */
+    ROOM_NAME_PATTERN: /^[a-zA-Z0-9-]+$/
 };

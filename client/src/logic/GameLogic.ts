@@ -1,4 +1,4 @@
-import type { GridPosition, Cell, Player, WinResult, GridDimensions, Move } from '../types';
+import type { GridPosition, Cell, Player, WinResult, GridDimensions, Move, GameState } from '../types';
 
 /**
  * Core game logic for Tic-Tac-Toe.
@@ -81,6 +81,41 @@ export class GameLogic {
      */
     public getMoveHistory(): readonly Move[] {
         return this.moveHistory;
+    }
+
+    /**
+     * Serializes the current game state for multiplayer synchronization.
+     * @returns A GameState object containing all data needed to reconstruct the state.
+     */
+    public getState(): GameState {
+        return {
+            moveHistory: [...this.moveHistory],
+            currentPlayer: this.currentPlayer,
+            winResult: this.lastWinResult
+        };
+    }
+
+    /**
+     * Restores the game state from a serialized GameState object.
+     * Used for receiving state updates from other players in multiplayer.
+     * @param state The GameState to restore.
+     */
+    public setState(state: GameState): void {
+        // Reset grid
+        for (let y = 0; y < this.dimensions.rows; y++) {
+            for (let x = 0; x < this.dimensions.cols; x++) {
+                this.grid[y][x] = '';
+            }
+        }
+
+        // Replay moves to reconstruct grid
+        this.moveHistory = [...state.moveHistory];
+        for (const move of this.moveHistory) {
+            this.grid[move.position.y][move.position.x] = move.player;
+        }
+
+        this.currentPlayer = state.currentPlayer;
+        this.lastWinResult = state.winResult;
     }
 
     // ==================== Core Actions ====================

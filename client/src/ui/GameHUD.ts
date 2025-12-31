@@ -24,6 +24,7 @@ interface ButtonConfig {
     getX: (screenWidth: number) => number;
     width: number;
     height: number;
+    panel: 'top' | 'bottom';
 }
 
 /**
@@ -35,14 +36,16 @@ interface ButtonConfig {
 export class GameHUD {
     private scene: Phaser.Scene;
     private callbacks: HUDCallbacks;
-    private uiBackground!: Phaser.GameObjects.Graphics;
-    private statusText!: Phaser.GameObjects.Text;
+    private uiBackgroundTop!: Phaser.GameObjects.Graphics;
+    private uiBackgroundBottom!: Phaser.GameObjects.Graphics;
+    private statusIndicator!: Phaser.GameObjects.Container;
     private connectionText!: Phaser.GameObjects.Text;
     private buttons: Map<string, Phaser.GameObjects.Container> = new Map();
     private buttonConfigs: ButtonConfig[] = [];
     private isConnected: boolean = false;
+    private playerCount: number = 0;
 
-    // Y position for small buttons
+    // Y position for small buttons (top panel)
     private readonly smallButtonY = (GridConfig.UI_HEIGHT - UIConfig.SMALL_BUTTON_SIZE) / 2;
 
     // ==================== Lifecycle ====================
@@ -61,41 +64,47 @@ export class GameHUD {
 
     /**
      * Initializes the button configurations with position calculations and properties.
-     * Buttons are defined from right to left: Restart, Connect, Theme, Zoom In, Zoom Out, Back.
+     * Top panel buttons (right to left): Restart, Connect.
+     * Bottom panel buttons (centered): Back, Zoom Out, Zoom In, Theme.
      */
     private initButtonConfigs() {
         const { BUTTON_MARGIN_RIGHT, SMALL_BUTTON_SIZE, SMALL_BUTTON_GAP } = UIConfig;
 
-        // Pre-computed offsets from the right edge for each button position.
-        // This avoids nested function calls during resize and improves performance.
         const btnSize = SMALL_BUTTON_SIZE;
         const gap = SMALL_BUTTON_GAP;
         const margin = BUTTON_MARGIN_RIGHT;
 
-        // Calculate cumulative offsets from right edge (right to left layout)
+        // Top panel: Calculate cumulative offsets from right edge (right to left layout)
         const restartOffset = btnSize + margin;
         const connectOffset = restartOffset + gap + btnSize;
-        const themeOffset = connectOffset + margin + btnSize;
-        const zoomInOffset = themeOffset + margin + btnSize;
-        const zoomOutOffset = zoomInOffset + gap + btnSize;
-        const backOffset = zoomOutOffset + margin + btnSize;
+
+        // Bottom panel: 4 buttons centered horizontally
+        // Layout: [back] [margin] [zoomOut] [gap] [zoomIn] [margin] [theme]
+        // Zoom buttons grouped together, with larger margins separating from other buttons
+        const bottomTotalWidth = 4 * btnSize + gap + 2 * margin;
+        // getX returns the left edge of each button, calculated from center
+        const getBottomButtonX = (w: number, index: number) => {
+            const startX = (w - bottomTotalWidth) / 2;
+            // Offsets: back, zoomOut, zoomIn, theme
+            const offsets = [
+                0,
+                btnSize + margin,
+                btnSize + margin + btnSize + gap,
+                btnSize + margin + btnSize + gap + btnSize + margin
+            ];
+            return startX + offsets[index];
+        };
 
         this.buttonConfigs = [
+            // Top panel buttons
             {
                 id: 'restart',
                 label: '⏻',
                 onClick: () => this.callbacks.onRestart(),
                 getX: (w: number) => w - restartOffset,
                 width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
-            },
-            {
-                id: 'theme',
-                label: () => isDarkMode() ? '☼' : '☾',
-                onClick: () => this.callbacks.onToggleTheme(),
-                getX: (w: number) => w - themeOffset,
-                width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
+                height: SMALL_BUTTON_SIZE,
+                panel: 'top'
             },
             {
                 id: 'connect',
@@ -103,31 +112,45 @@ export class GameHUD {
                 onClick: () => this.isConnected ? this.callbacks.onDisconnect() : this.callbacks.onConnect(),
                 getX: (w: number) => w - connectOffset,
                 width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
+                height: SMALL_BUTTON_SIZE,
+                panel: 'top'
             },
+            // Bottom panel buttons (centered, left to right: back, zoom out, zoom in, theme)
             {
-                id: 'zoomIn',
-                label: '+',
-                onClick: () => this.callbacks.onZoom(GameConfig.ZOOM_STEP),
-                getX: (w: number) => w - zoomInOffset,
+                id: 'back',
+                label: '↺',
+                onClick: () => this.callbacks.onUndo(),
+                getX: (w: number) => getBottomButtonX(w, 0),
                 width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
+                height: SMALL_BUTTON_SIZE,
+                panel: 'bottom'
             },
             {
                 id: 'zoomOut',
                 label: '-',
                 onClick: () => this.callbacks.onZoom(-GameConfig.ZOOM_STEP),
-                getX: (w: number) => w - zoomOutOffset,
+                getX: (w: number) => getBottomButtonX(w, 1),
                 width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
+                height: SMALL_BUTTON_SIZE,
+                panel: 'bottom'
             },
             {
-                id: 'back',
-                label: '↺',
-                onClick: () => this.callbacks.onUndo(),
-                getX: (w: number) => w - backOffset,
+                id: 'zoomIn',
+                label: '+',
+                onClick: () => this.callbacks.onZoom(GameConfig.ZOOM_STEP),
+                getX: (w: number) => getBottomButtonX(w, 2),
                 width: SMALL_BUTTON_SIZE,
-                height: SMALL_BUTTON_SIZE
+                height: SMALL_BUTTON_SIZE,
+                panel: 'bottom'
+            },
+            {
+                id: 'theme',
+                label: () => isDarkMode() ? '☼' : '☾',
+                onClick: () => this.callbacks.onToggleTheme(),
+                getX: (w: number) => getBottomButtonX(w, 3),
+                width: SMALL_BUTTON_SIZE,
+                height: SMALL_BUTTON_SIZE,
+                panel: 'bottom'
             }
         ];
     }
@@ -136,8 +159,9 @@ export class GameHUD {
      * Creates all UI elements.
      */
     private create() {
-        this.createUIBackground();
-        this.createStatusText();
+        this.createUIBackgroundTop();
+        this.createUIBackgroundBottom();
+        this.createStatusIndicator();
         this.createConnectionText();
         this.createAllButtons();
     }
@@ -150,29 +174,50 @@ export class GameHUD {
      */
     public getElements(): Phaser.GameObjects.GameObject[] {
         return [
-            this.uiBackground,
-            this.statusText,
+            this.uiBackgroundTop,
+            this.uiBackgroundBottom,
+            this.statusIndicator,
             this.connectionText,
             ...this.buttons.values()
         ];
     }
 
     /**
-     * Updates the status text to show which player's turn it is.
+     * Updates the status indicator to show which player's turn it is.
      * @param currentPlayer The symbol of the current player.
      */
     public updateTurn(currentPlayer: Player) {
-        this.statusText.setText(`Player ${currentPlayer}`);
-        this.statusText.setColor(currentPlayer === 'X' ? ColorConfig.PLAYER_X_STR : ColorConfig.PLAYER_O_STR);
+        const text = this.statusIndicator.getData('text') as Phaser.GameObjects.Text;
+
+        text.setText(currentPlayer);
+        text.setColor(currentPlayer === 'X' ? ColorConfig.PLAYER_X_STR : ColorConfig.PLAYER_O_STR);
+
+        this.redrawStatusBackground();
     }
 
     /**
-     * Displays the win message.
+     * Displays the win indicator.
      * @param winResult The result of the game.
      */
     public showWin(winResult: WinResult) {
-        this.statusText.setText(`Player ${winResult.player} Wins!`);
-        this.statusText.setColor(ColorConfig.WIN_STR);
+        const text = this.statusIndicator.getData('text') as Phaser.GameObjects.Text;
+
+        text.setText(winResult.player);
+        text.setColor(ColorConfig.WIN_STR);
+
+        this.redrawStatusBackground();
+    }
+
+    /**
+     * Redraws the status indicator background with current theme colors.
+     */
+    private redrawStatusBackground() {
+        const background = this.statusIndicator.getData('background') as Phaser.GameObjects.Graphics;
+        const radius = UIConfig.SMALL_BUTTON_SIZE / 2;
+
+        background.clear();
+        background.fillStyle(ColorConfig.BUTTON_BG, 1);
+        background.fillCircle(radius, radius, radius);
     }
 
     /**
@@ -185,10 +230,12 @@ export class GameHUD {
 
         // Update connection text
         if (connected && roomInfo) {
-            const playerInfo = roomInfo.playerCount === 2 ? '👥' : '👤';
-            this.connectionText.setText(`${playerInfo} Room: ${roomInfo.roomName}`);
-            this.connectionText.setColor('#4CAF50');
+            this.playerCount = roomInfo.playerCount;
+            this.connectionText.setText(roomInfo.roomName);
+            // Gray for 1 player, green for 2 players
+            this.connectionText.setColor(roomInfo.playerCount === 2 ? ColorConfig.WIN_STR : '#888888');
         } else {
+            this.playerCount = 0;
             this.connectionText.setText('');
         }
 
@@ -201,50 +248,80 @@ export class GameHUD {
      */
     public updateUIBackground() {
         const width = this.scene.scale.width;
-        this.uiBackground.clear();
-        this.uiBackground.fillStyle(ColorConfig.UI_BG, UIConfig.UI_BG_ALPHA);
-        this.uiBackground.fillRect(0, 0, width, GridConfig.UI_HEIGHT);
+        const height = this.scene.scale.height;
+        // Top panel
+        this.uiBackgroundTop.clear();
+        this.uiBackgroundTop.fillStyle(ColorConfig.UI_BG, UIConfig.UI_BG_ALPHA);
+        this.uiBackgroundTop.fillRect(0, 0, width, GridConfig.UI_HEIGHT);
+        // Bottom panel
+        this.uiBackgroundBottom.clear();
+        this.uiBackgroundBottom.fillStyle(ColorConfig.UI_BG, UIConfig.UI_BG_ALPHA);
+        this.uiBackgroundBottom.fillRect(0, height - GridConfig.UI_HEIGHT, width, GridConfig.UI_HEIGHT);
     }
 
     // ==================== Private UI Creation ====================
 
     /**
-     * Creates the background graphics for the UI header.
+     * Creates the background graphics for the top UI panel.
      */
-    private createUIBackground() {
-        this.uiBackground = this.scene.add.graphics();
-        this.uiBackground.setScrollFactor(0);
-        this.uiBackground.setDepth(1); // Above grid
+    private createUIBackgroundTop() {
+        this.uiBackgroundTop = this.scene.add.graphics();
+        this.uiBackgroundTop.setScrollFactor(0);
+        this.uiBackgroundTop.setDepth(1); // Above grid
+    }
+
+    /**
+     * Creates the background graphics for the bottom UI panel.
+     */
+    private createUIBackgroundBottom() {
+        this.uiBackgroundBottom = this.scene.add.graphics();
+        this.uiBackgroundBottom.setScrollFactor(0);
+        this.uiBackgroundBottom.setDepth(1); // Above grid
         this.updateUIBackground();
     }
 
     /**
-     * Creates the text object displaying the current player's turn.
+     * Creates the status indicator showing the current player's symbol.
      */
-    private createStatusText() {
-        const initialColor = ColorConfig.PLAYER_X_STR;
-        this.statusText = this.scene.add.text(
-            GridConfig.MARGIN + UIConfig.STATUS_TEXT_OFFSET_X,
-            GridConfig.UI_HEIGHT / 2 - 10,
-            'Player X',
-            { fontSize: UIConfig.STATUS_TEXT_FONT_SIZE, color: initialColor }
-        );
-        this.statusText.setOrigin(0, 0.5);
-        this.statusText.setScrollFactor(0);
-        this.statusText.setDepth(2); // Above background
+    private createStatusIndicator() {
+        const size = UIConfig.SMALL_BUTTON_SIZE;
+        const radius = size / 2;
+        const x = UIConfig.BUTTON_MARGIN_RIGHT;
+        const y = this.smallButtonY;
+
+        const container = this.scene.add.container(x, y);
+        container.setScrollFactor(0);
+        container.setDepth(2);
+
+        const background = this.scene.add.graphics();
+        background.fillStyle(ColorConfig.BUTTON_BG, 1);
+        background.fillCircle(radius, radius, radius);
+
+        const text = this.scene.add.text(radius, radius, 'X', {
+            fontSize: UIConfig.BUTTON_TEXT_FONT_SIZE,
+            color: ColorConfig.PLAYER_X_STR
+        });
+        text.setOrigin(0.5);
+
+        container.add([background, text]);
+        container.setData('background', background);
+        container.setData('text', text);
+
+        this.statusIndicator = container;
     }
 
     /**
      * Creates the text object displaying the connection status.
      */
     private createConnectionText() {
+        const screenWidth = this.scene.scale.width;
         this.connectionText = this.scene.add.text(
-            GridConfig.MARGIN + UIConfig.STATUS_TEXT_OFFSET_X,
-            GridConfig.UI_HEIGHT / 2 + 12,
+            screenWidth / 2,
+            GridConfig.UI_HEIGHT / 2,
             '',
-            { fontSize: '14px', color: '#4CAF50' }
+            { fontSize: '14px', color: ColorConfig.WIN_STR }
         );
-        this.connectionText.setOrigin(0, 0.5);
+        this.connectionText.setOrigin(0.5, 0.5); // Center both horizontally and vertically
         this.connectionText.setScrollFactor(0);
         this.connectionText.setDepth(2);
     }
@@ -254,11 +331,15 @@ export class GameHUD {
      */
     private createAllButtons() {
         const screenWidth = this.scene.scale.width;
+        const screenHeight = this.scene.scale.height;
 
         for (const config of this.buttonConfigs) {
             const x = config.getX(screenWidth);
+            const y = config.panel === 'top'
+                ? this.smallButtonY
+                : screenHeight - GridConfig.UI_HEIGHT + this.smallButtonY;
             const label = typeof config.label === 'function' ? config.label() : config.label;
-            const container = this.createButton(x, this.smallButtonY, label, config.onClick, config.width, config.height);
+            const container = this.createButton(x, y, label, config.onClick, config.width, config.height);
             this.buttons.set(config.id, container);
         }
     }
@@ -344,6 +425,14 @@ export class GameHUD {
     public refresh() {
         this.updateUIBackground();
 
+        // Update status indicator background
+        this.redrawStatusBackground();
+
+        // Update connection text color for theme
+        if (this.isConnected && this.playerCount === 2) {
+            this.connectionText.setColor(ColorConfig.WIN_STR);
+        }
+
         // Update all button containers
         for (const [id, container] of this.buttons) {
             const background = container.getData('background') as Phaser.GameObjects.Graphics;
@@ -367,15 +456,22 @@ export class GameHUD {
     /**
      * Handles window resize events to update the UI and button positions.
      * @param width The new width of the game canvas.
+     * @param height The new height of the game canvas.
      */
-    public handleResize(width: number) {
+    public handleResize(width: number, height: number) {
         this.updateUIBackground();
+
+        // Update connection text position (centered horizontally)
+        this.connectionText.x = width / 2;
 
         // Update all button positions from configs
         for (const config of this.buttonConfigs) {
             const container = this.buttons.get(config.id);
             if (container) {
                 container.x = config.getX(width);
+                container.y = config.panel === 'top'
+                    ? this.smallButtonY
+                    : height - GridConfig.UI_HEIGHT + this.smallButtonY;
             }
         }
     }

@@ -82,14 +82,14 @@ io.on('connection', (socket: Socket) => {
         try {
             // Validate room name
             if (!roomName || !/^[a-zA-Z0-9-]+$/.test(roomName)) {
-                callback({ success: false, error: 'Invalid room name. Use only letters, numbers, and hyphens.' });
+                callback({ success: false, error: 'Invalid room name.' });
                 return;
             }
 
             // Check room capacity
             const playerCount = await getRoomPlayerCount(roomName);
             if (playerCount >= 2) {
-                callback({ success: false, error: 'Room is full. Maximum 2 players allowed.' });
+                callback({ success: false, error: 'Maximum 2 players allowed.' });
                 return;
             }
 

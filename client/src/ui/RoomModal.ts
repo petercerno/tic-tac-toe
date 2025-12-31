@@ -31,11 +31,11 @@ function generateModalStyles(dark: boolean): string {
 
         #room-modal-container {
             background: ${bgColor};
-            padding: 30px;
+            padding: 24px;
             border-radius: 12px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-            min-width: 320px;
-            max-width: 400px;
+            min-width: 240px;
+            max-width: 280px;
             animation: modalSlideIn 0.2s ease-out;
         }
 
@@ -51,9 +51,9 @@ function generateModalStyles(dark: boolean): string {
         }
 
         #room-modal-title {
-            margin: 0 0 20px 0;
+            margin: 0 0 16px 0;
             color: ${textColor};
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 600;
             text-align: center;
         }
@@ -96,14 +96,14 @@ function generateModalStyles(dark: boolean): string {
 
         #room-modal-buttons {
             display: flex;
-            gap: 12px;
-            margin-top: 20px;
+            gap: 10px;
+            margin-top: 16px;
         }
 
         #room-modal-buttons button {
             flex: 1;
-            padding: 12px 20px;
-            font-size: 16px;
+            padding: 10px 16px;
+            font-size: 14px;
             font-weight: 500;
             border: none;
             border-radius: 8px;
@@ -278,7 +278,7 @@ export class RoomModal {
                 errorEl.textContent = '';
             } else if (!MultiplayerConfig.ROOM_NAME_PATTERN.test(value)) {
                 connectBtn.disabled = true;
-                errorEl.textContent = 'Invalid characters. Use only letters, numbers, and hyphens.';
+                errorEl.textContent = 'Letters, numbers, hyphens only';
             } else {
                 connectBtn.disabled = false;
                 errorEl.textContent = '';

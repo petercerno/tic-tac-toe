@@ -330,8 +330,9 @@ export default class GameScene extends Phaser.Scene {
      * @param pointer The pointer object from Phaser input.
      */
     private handleGridClick(pointer: Phaser.Input.Pointer) {
-        // Ignore inputs on the UI header
-        if (pointer.y <= GridConfig.UI_HEIGHT) return;
+        const screenHeight = this.scale.height;
+        // Ignore inputs on the UI panels (top and bottom)
+        if (pointer.y <= GridConfig.UI_HEIGHT || pointer.y >= screenHeight - GridConfig.UI_HEIGHT) return;
 
         if (this.gameLogic.isGameOver()) return;
 
@@ -351,7 +352,7 @@ export default class GameScene extends Phaser.Scene {
      */
     private handleResize(gameSize: Phaser.Structs.Size) {
         if (this.hud) {
-            this.hud.handleResize(gameSize.width);
+            this.hud.handleResize(gameSize.width, gameSize.height);
         }
     }
 

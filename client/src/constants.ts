@@ -43,9 +43,9 @@ const DARK_COLORS = {
  */
 const LIGHT_COLORS = {
     GAME_BG: '#e0e0e0',
-    PLAYER_X: '#cc8800',
-    PLAYER_O: '#0088cc',
-    WIN: '#00aa00',
+    PLAYER_X: '#800000',
+    PLAYER_O: '#00008b',
+    WIN: '#009900',
     UI_BG: '#ffffff',
     BUTTON_BG: '#cccccc',
     BUTTON_HOVER: '#aaaaaa',
@@ -162,10 +162,6 @@ export const GameConfig = {
 export const UIConfig = {
     /** Opacity of the UI header background (0 to 1). */
     UI_BG_ALPHA: 0.5,
-    /** Horizontal offset for status text from the left margin. */
-    STATUS_TEXT_OFFSET_X: 10,
-    /** Font size for the status text. */
-    STATUS_TEXT_FONT_SIZE: '20px',
     /** Right margin between buttons in pixels. */
     BUTTON_MARGIN_RIGHT: 20,
     /** Border radius for rounded button corners. */

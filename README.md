@@ -34,8 +34,10 @@ tic-tac-toe/
 │   └── dist/        # Production build output
 ├── server/          # Node.js Express + Socket.IO backend
 │   ├── src/
-│   │   ├── index.ts          # Server entry point
-│   │   └── GameRoomManager.ts # Socket.IO room management
+│   │   ├── index.ts           # Server entry point
+│   │   ├── GameRoomManager.ts # Socket.IO room management
+│   │   ├── RateLimiter.ts     # Rate limiting and connection tracking
+│   │   └── ServerHealth.ts    # Health endpoint with server stats
 │   └── dist/        # Compiled server output
 ├── shared/          # Shared types and constants
 │   ├── types.ts     # Socket event types and payloads
@@ -113,6 +115,19 @@ Visit `/health` to view a dashboard with server statistics including active room
 3.  Share the room name with a friend to play together
 4.  Maximum 2 players per room
 5.  Rooms automatically close after 10 minutes of inactivity
+
+### Security
+
+The server includes built-in protection against abuse:
+
+| Protection | Limit |
+|------------|-------|
+| Connections per IP | 100 |
+| JOIN_ROOM requests | 5 per 10 seconds |
+| GAME_STATE broadcasts | 30 per 10 seconds |
+| Max game state payload | 100 KB |
+| Max concurrent rooms | 10,000 |
+| Health endpoint | 30 per 10 seconds per IP |
 
 ### Available Commands
 

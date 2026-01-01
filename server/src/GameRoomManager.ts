@@ -13,7 +13,20 @@ import {
     type SendStatePayload,
     type StateRequestedPayload,
 } from '../../shared/types.js';
-import { ROOM_NAME_REGEX, MAX_ROOM_NAME_LENGTH, MAX_PLAYERS_PER_ROOM, ROOM_INACTIVITY_TIMEOUT_MS } from '../../shared/constants.js';
+import {
+    ROOM_NAME_REGEX,
+    MAX_ROOM_NAME_LENGTH,
+    MAX_PLAYERS_PER_ROOM,
+    ROOM_INACTIVITY_TIMEOUT_MS,
+    MAX_TOTAL_ROOMS,
+} from '../../shared/constants.js';
+import {
+    checkJoinRoomLimit,
+    checkGameStateLimit,
+    checkSendStateLimit,
+    checkRequestStateLimit,
+    validateGameStateSize,
+} from './RateLimiter.js';
 
 /**
  * Manages Socket.IO connections and room-based multiplayer functionality.
@@ -83,7 +96,7 @@ export class GameRoomManager {
         });
 
         socket.on(SocketEvents.SEND_STATE, (data: SendStatePayload) => {
-            this.handleSendState(data);
+            this.handleSendState(socket, currentRoom, data);
         });
 
         socket.on('disconnect', () => {
@@ -91,24 +104,9 @@ export class GameRoomManager {
         });
     }
 
-    /**
-     * Handles socket disconnect event.
-     *
-     * Flow:
-     * 1. Client disconnects (closes browser, network issue, etc.)
-     * 2. Server emits PLAYER_LEFT to remaining room members
-     *
-     * @param socket - The disconnecting socket
-     * @param currentRoom - Room the player was in (null if not in a room)
-     */
-    private handleDisconnect(socket: Socket, currentRoom: string | null): void {
-        console.log(`Client disconnected: ${socket.id}`);
-        if (currentRoom) {
-            socket.to(currentRoom).emit(SocketEvents.PLAYER_LEFT);
-        }
-    }
-
-    // ==================== Room Management ====================
+    // ==================== Event Handlers ====================
+    // Methods are ordered to match the event registration order in handleConnection:
+    // JOIN_ROOM → LEAVE_ROOM → GAME_STATE → REQUEST_STATE → SEND_STATE → disconnect
 
     /**
      * Handles JOIN_ROOM event from client.
@@ -132,14 +130,26 @@ export class GameRoomManager {
         callback: (response: JoinRoomResponse) => void
     ): Promise<string | null> {
         try {
+            // Rate limit check
+            if (!await checkJoinRoomLimit(socket.id)) {
+                callback({ success: false, error: 'Too many requests. Please slow down.' });
+                return currentRoom;
+            }
+
             // Validate room name
             if (!roomName || !ROOM_NAME_REGEX.test(roomName) || roomName.length > MAX_ROOM_NAME_LENGTH) {
                 callback({ success: false, error: 'Invalid room name.' });
                 return currentRoom;
             }
 
-            // Check room capacity
+            // Check total room limit (only for new rooms)
             const playerCount = this.getRoomPlayerCount(roomName);
+            if (playerCount === 0 && this.getTotalRoomCount() >= MAX_TOTAL_ROOMS) {
+                callback({ success: false, error: 'Server is at capacity. Please try again later.' });
+                return currentRoom;
+            }
+
+            // Check room capacity
             if (playerCount >= MAX_PLAYERS_PER_ROOM) {
                 callback({ success: false, error: `Maximum ${MAX_PLAYERS_PER_ROOM} players allowed.` });
                 return currentRoom;
@@ -202,6 +212,123 @@ export class GameRoomManager {
     }
 
     /**
+     * Handles GAME_STATE event from client.
+     *
+     * Flow:
+     * 1. Client emits GAME_STATE after making a move
+     * 2. Server relays GAME_STATE to all other players in the room
+     *
+     * @param socket - The socket sending the state
+     * @param currentRoom - Room to broadcast to
+     * @param state - The complete game state to synchronize
+     */
+    private async handleGameState(socket: Socket, currentRoom: string | null, state: unknown): Promise<void> {
+        if (!currentRoom) return;
+
+        // Rate limit check
+        if (!await checkGameStateLimit(socket.id)) {
+            console.log(`Rate limited GAME_STATE from ${socket.id}`);
+            return;
+        }
+
+        // Payload size validation
+        if (!validateGameStateSize(state)) {
+            console.log(`Rejected oversized GAME_STATE from ${socket.id}`);
+            return;
+        }
+
+        // Reset inactivity timeout on any state change
+        this.resetRoomTimeout(currentRoom);
+        socket.to(currentRoom).emit(SocketEvents.GAME_STATE, state);
+    }
+
+    /**
+     * Handles REQUEST_STATE event from client.
+     *
+     * Flow:
+     * 1. New player (non-owner) emits REQUEST_STATE after joining
+     * 2. Server emits STATE_REQUESTED to room owner with requester's socket ID
+     * 3. Room owner should respond with SEND_STATE containing current game state
+     *
+     * @param socket - The socket requesting state (new player)
+     * @param currentRoom - Room to request state from
+     */
+    private async handleRequestState(socket: Socket, currentRoom: string | null): Promise<void> {
+        if (!currentRoom) return;
+
+        // Rate limit check
+        if (!await checkRequestStateLimit(socket.id)) {
+            console.log(`Rate limited REQUEST_STATE from ${socket.id}`);
+            return;
+        }
+
+        const payload: StateRequestedPayload = { requesterId: socket.id };
+        socket.to(currentRoom).emit(SocketEvents.STATE_REQUESTED, payload);
+    }
+
+    /**
+     * Handles SEND_STATE event from client (room owner).
+     *
+     * Flow:
+     * 1. Room owner emits SEND_STATE in response to STATE_REQUESTED
+     * 2. Server verifies sender is in same room as target
+     * 3. Server validates payload size
+     * 4. Server sends GAME_STATE directly to the specified target player
+     *
+     * @param socket - The socket sending the state (must be room owner)
+     * @param currentRoom - Room the sender is in
+     * @param data - Contains targetId (recipient socket ID) and game state
+     */
+    private async handleSendState(
+        socket: Socket,
+        currentRoom: string | null,
+        data: SendStatePayload
+    ): Promise<void> {
+        if (!currentRoom) return;
+
+        // Rate limit check
+        if (!await checkSendStateLimit(socket.id)) {
+            console.log(`Rate limited SEND_STATE from ${socket.id}`);
+            return;
+        }
+
+        // Verify target is in the same room as sender
+        const room = this.io.sockets.adapter.rooms.get(currentRoom);
+        if (!room || !room.has(data.targetId)) {
+            console.log(`Rejected SEND_STATE: target ${data.targetId} not in room ${currentRoom}`);
+            return;
+        }
+
+        // Payload size validation
+        if (!validateGameStateSize(data.state)) {
+            console.log(`Rejected oversized SEND_STATE from ${socket.id}`);
+            return;
+        }
+
+        this.io.to(data.targetId).emit(SocketEvents.GAME_STATE, data.state);
+    }
+
+    /**
+     * Handles socket disconnect event.
+     *
+     * Flow:
+     * 1. Client disconnects (closes browser, network issue, etc.)
+     * 2. Server removes socket from room and notifies remaining members
+     * 3. Clears room timeout if room becomes empty
+     *
+     * @param socket - The disconnecting socket
+     * @param currentRoom - Room the player was in (null if not in a room)
+     */
+    private handleDisconnect(socket: Socket, currentRoom: string | null): void {
+        console.log(`Client disconnected: ${socket.id}`);
+        if (currentRoom) {
+            this.leaveCurrentRoom(socket, currentRoom);
+        }
+    }
+
+    // ==================== Room Utilities ====================
+
+    /**
      * Removes a socket from its current room and notifies remaining members.
      *
      * Flow:
@@ -238,56 +365,14 @@ export class GameRoomManager {
         return room ? room.size : 0;
     }
 
-    // ==================== Game State Synchronization ====================
-
     /**
-     * Handles GAME_STATE event from client.
+     * Returns the total number of active game rooms.
+     * Uses roomTimeouts.size for O(1) lookup since all active rooms have timeouts.
      *
-     * Flow:
-     * 1. Client emits GAME_STATE after making a move
-     * 2. Server relays GAME_STATE to all other players in the room
-     *
-     * @param socket - The socket sending the state
-     * @param currentRoom - Room to broadcast to
-     * @param state - The complete game state to synchronize
+     * @returns The number of active game rooms
      */
-    private handleGameState(socket: Socket, currentRoom: string | null, state: unknown): void {
-        if (currentRoom) {
-            // Reset inactivity timeout on any state change
-            this.resetRoomTimeout(currentRoom);
-            socket.to(currentRoom).emit(SocketEvents.GAME_STATE, state);
-        }
-    }
-
-    /**
-     * Handles REQUEST_STATE event from client.
-     *
-     * Flow:
-     * 1. New player (non-owner) emits REQUEST_STATE after joining
-     * 2. Server emits STATE_REQUESTED to room owner with requester's socket ID
-     * 3. Room owner should respond with SEND_STATE containing current game state
-     *
-     * @param socket - The socket requesting state (new player)
-     * @param currentRoom - Room to request state from
-     */
-    private handleRequestState(socket: Socket, currentRoom: string | null): void {
-        if (currentRoom) {
-            const payload: StateRequestedPayload = { requesterId: socket.id };
-            socket.to(currentRoom).emit(SocketEvents.STATE_REQUESTED, payload);
-        }
-    }
-
-    /**
-     * Handles SEND_STATE event from client (room owner).
-     *
-     * Flow:
-     * 1. Room owner emits SEND_STATE in response to STATE_REQUESTED
-     * 2. Server sends GAME_STATE directly to the specified target player
-     *
-     * @param data - Contains targetId (recipient socket ID) and game state
-     */
-    private handleSendState(data: SendStatePayload): void {
-        this.io.to(data.targetId).emit(SocketEvents.GAME_STATE, data.state);
+    private getTotalRoomCount(): number {
+        return this.roomTimeouts.size;
     }
 
     // ==================== Room Timeout Management ====================

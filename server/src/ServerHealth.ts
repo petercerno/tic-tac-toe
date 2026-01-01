@@ -6,6 +6,7 @@
  */
 import type { Express } from 'express';
 import type { Server } from 'socket.io';
+import { healthRateLimitMiddleware } from './RateLimiter.js';
 
 /**
  * Manages the server health endpoint and statistics display.
@@ -19,11 +20,12 @@ export class ServerHealth {
 
     /**
      * Registers the /health endpoint on the Express app.
+     * Includes rate limiting to prevent abuse.
      *
      * @param app - The Express application instance
      */
     register(app: Express): void {
-        app.get('/health', (_req, res) => {
+        app.get('/health', healthRateLimitMiddleware, (_req, res) => {
             const { activeRooms, activePlayers } = this.getStats();
             const html = this.renderHealthPage(activeRooms, activePlayers);
             res.type('html').send(html);

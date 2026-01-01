@@ -34,8 +34,12 @@ tic-tac-toe/
 │   └── dist/        # Production build output
 ├── server/          # Node.js Express + Socket.IO backend
 │   ├── src/
-│   │   └── index.ts # Server entry point with room management
+│   │   ├── index.ts          # Server entry point
+│   │   └── GameRoomManager.ts # Socket.IO room management
 │   └── dist/        # Compiled server output
+├── shared/          # Shared types and constants
+│   ├── types.ts     # Socket event types and payloads
+│   └── constants.ts # Room validation constants
 └── package.json     # Root package with all scripts
 ```
 

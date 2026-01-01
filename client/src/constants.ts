@@ -1,3 +1,5 @@
+import { ROOM_NAME_REGEX } from '@shared/constants';
+
 /**
  * Configuration for the game grid layout and dimensions.
  */
@@ -201,5 +203,5 @@ export const MultiplayerConfig = {
     /** WebSocket server URL. In development, Vite proxies to the Express server. */
     SERVER_URL: 'http://localhost:3000',
     /** Pattern for valid room names (letters, numbers, and hyphens only). */
-    ROOM_NAME_PATTERN: /^[a-zA-Z0-9-]+$/
+    ROOM_NAME_PATTERN: ROOM_NAME_REGEX
 };

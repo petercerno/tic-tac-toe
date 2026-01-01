@@ -112,7 +112,7 @@ export default class GameScene extends Phaser.Scene {
             onError: (message) => this.handleMultiplayerError(message),
             onPlayerLeft: () => this.handlePlayerLeft(),
             onPlayerJoined: (playerCount) => this.handlePlayerJoined(playerCount),
-            onStateRequested: () => this.handleStateRequested()
+            onStateRequested: (requesterId) => this.handleStateRequested(requesterId)
         });
 
         this.roomModal = new RoomModal({
@@ -254,11 +254,15 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Handles when another player requests the current state.
-     * Sends the current game state to the requesting player.
+     * Sends the current game state directly to the requesting player.
+     *
+     * @param requesterId - Socket ID of the player who requested state
      */
-    private handleStateRequested() {
-        // Broadcast current state to the new player
-        this.broadcastState();
+    private handleStateRequested(requesterId: string) {
+        // Send current state directly to the requesting player
+        if (this.multiplayerManager.isConnected()) {
+            this.multiplayerManager.sendStateTo(requesterId, this.gameLogic.getState());
+        }
     }
 
     /**

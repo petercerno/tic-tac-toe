@@ -1,6 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 import type { GameState, RoomInfo } from '../types';
 import { MultiplayerConfig } from '../constants';
+import {
+    SocketEvents,
+    type JoinRoomResponse,
+    type PlayerJoinedPayload,
+    type SendStatePayload,
+    type StateRequestedPayload,
+} from '@shared/index';
 
 /**
  * Callback functions for multiplayer events.
@@ -16,8 +23,11 @@ export interface MultiplayerCallbacks {
     onPlayerLeft: () => void;
     /** Called when another player joins the room. */
     onPlayerJoined: (playerCount: number) => void;
-    /** Called when state is requested by another player. */
-    onStateRequested: () => void;
+    /**
+     * Called when state is requested by another player.
+     * @param requesterId - Socket ID of the player requesting state (use with sendStateTo)
+     */
+    onStateRequested: (requesterId: string) => void;
 }
 
 /**
@@ -36,6 +46,8 @@ export class MultiplayerManager {
 
     /**
      * Checks if currently connected to a room.
+     *
+     * @returns true if socket is connected AND currently in a room
      */
     public isConnected(): boolean {
         return this.socket?.connected === true && this.currentRoom !== null;
@@ -43,13 +55,17 @@ export class MultiplayerManager {
 
     /**
      * Gets the current room info if connected.
+     *
+     * @returns RoomInfo object with room name, ownership status, and player count, or null if not in a room
      */
     public getRoomInfo(): RoomInfo | null {
         return this.currentRoom;
     }
 
     /**
-     * Checks if this client is the room owner.
+     * Checks if this client is the room owner (first player to join).
+     *
+     * @returns true if this client created/owns the room
      */
     public getIsRoomOwner(): boolean {
         return this.isRoomOwner;
@@ -57,7 +73,15 @@ export class MultiplayerManager {
 
     /**
      * Connects to a room. Creates the room if it doesn't exist.
-     * @param roomName The name of the room to join.
+     *
+     * Flow:
+     * 1. Creates socket connection to server (if not already connected)
+     * 2. Emits JOIN_ROOM to server
+     * 3. Server responds with JoinRoomResponse via callback
+     * 4. If not room owner, emits REQUEST_STATE to get current game state
+     *
+     * @param roomName - The name of the room to join
+     * @returns Promise that resolves on successful join, rejects on failure
      */
     public async connect(roomName: string): Promise<void> {
         return new Promise((resolve, reject) => {
@@ -85,18 +109,21 @@ export class MultiplayerManager {
 
     /**
      * Joins a room after socket connection is established.
+     *
+     * Emits JOIN_ROOM to server and handles the acknowledgment callback.
+     * If joining as non-owner, automatically requests current game state.
+     *
+     * @param roomName - Room name to join
+     * @param resolve - Promise resolve callback for successful join
+     * @param reject - Promise reject callback for failed join
+     * @returns void
      */
     private joinRoom(
         roomName: string,
         resolve: () => void,
         reject: (error: Error) => void
     ): void {
-        this.socket!.emit('join-room', roomName, (response: {
-            success: boolean;
-            error?: string;
-            isRoomOwner?: boolean;
-            playerCount?: number;
-        }) => {
+        this.socket!.emit(SocketEvents.JOIN_ROOM, roomName, (response: JoinRoomResponse) => {
             if (response.success) {
                 this.isRoomOwner = response.isRoomOwner ?? false;
                 this.currentRoom = {
@@ -108,7 +135,7 @@ export class MultiplayerManager {
 
                 // If not room owner, request current state from owner
                 if (!this.isRoomOwner) {
-                    this.socket!.emit('request-state');
+                    this.socket!.emit(SocketEvents.REQUEST_STATE);
                 }
 
                 resolve();
@@ -120,48 +147,79 @@ export class MultiplayerManager {
 
     /**
      * Disconnects from the current room.
+     *
+     * Flow:
+     * 1. Emits LEAVE_ROOM to server
+     * 2. Server notifies other players via PLAYER_LEFT
+     * 3. Clears local room state and notifies via onConnectionChange callback
+     *
+     * @returns void
      */
     public disconnect(): void {
         if (this.socket && this.currentRoom) {
-            this.socket.emit('leave-room');
-            this.currentRoom = null;
-            this.isRoomOwner = false;
+            this.socket.emit(SocketEvents.LEAVE_ROOM);
+            this.resetState();
             this.callbacks.onConnectionChange(false);
         }
     }
 
     /**
      * Broadcasts the current game state to other players in the room.
-     * @param state The game state to broadcast.
+     *
+     * Flow:
+     * 1. Client emits GAME_STATE to server
+     * 2. Server relays GAME_STATE to all other players in the room
+     * 3. Other players receive state via onStateReceived callback
+     *
+     * @param state - The complete game state to broadcast
+     * @returns void
      */
     public broadcastState(state: GameState): void {
         if (this.socket && this.currentRoom) {
-            this.socket.emit('game-state', state);
+            this.socket.emit(SocketEvents.GAME_STATE, state);
         }
     }
 
     /**
-     * Sends state to a specific player (response to state request).
-     * @param targetId The socket ID of the player to send state to.
-     * @param state The game state to send.
+     * Sends state to a specific player (response to STATE_REQUESTED).
+     *
+     * Flow:
+     * 1. Room owner emits SEND_STATE with target player's socket ID
+     * 2. Server sends GAME_STATE directly to the specified player
+     * 3. Target player receives state via onStateReceived callback
+     *
+     * @param targetId - Socket ID of the player who requested state
+     * @param state - The complete game state to send
+     * @returns void
      */
     public sendStateTo(targetId: string, state: GameState): void {
         if (this.socket) {
-            this.socket.emit('send-state', { targetId, state });
+            const payload: SendStatePayload<GameState> = { targetId, state };
+            this.socket.emit(SocketEvents.SEND_STATE, payload);
         }
     }
 
     /**
-     * Sets up Socket.IO event listeners.
+     * Sets up Socket.IO event listeners for incoming server events.
+     *
+     * Registers handlers for:
+     * - GAME_STATE: Received game state from another player
+     * - PLAYER_LEFT: Other player disconnected or left
+     * - PLAYER_JOINED: New player joined the room
+     * - STATE_REQUESTED: New player needs current game state (owner only)
+     * - disconnect: Connection to server lost
+     * - connect_error: Connection error occurred
+     *
+     * @returns void
      */
     private setupEventListeners(): void {
         if (!this.socket) return;
 
-        this.socket.on('game-state', (state: GameState) => {
+        this.socket.on(SocketEvents.GAME_STATE, (state: GameState) => {
             this.callbacks.onStateReceived(state);
         });
 
-        this.socket.on('player-left', () => {
+        this.socket.on(SocketEvents.PLAYER_LEFT, () => {
             if (this.currentRoom) {
                 this.currentRoom.playerCount = Math.max(1, this.currentRoom.playerCount - 1);
                 // If other player left, this client becomes the owner
@@ -171,20 +229,19 @@ export class MultiplayerManager {
             this.callbacks.onPlayerLeft();
         });
 
-        this.socket.on('player-joined', (data: { playerCount: number }) => {
+        this.socket.on(SocketEvents.PLAYER_JOINED, (data: PlayerJoinedPayload) => {
             if (this.currentRoom) {
                 this.currentRoom.playerCount = data.playerCount;
             }
             this.callbacks.onPlayerJoined(data.playerCount);
         });
 
-        this.socket.on('state-requested', () => {
-            this.callbacks.onStateRequested();
+        this.socket.on(SocketEvents.STATE_REQUESTED, (data: StateRequestedPayload) => {
+            this.callbacks.onStateRequested(data.requesterId);
         });
 
         this.socket.on('disconnect', () => {
-            this.currentRoom = null;
-            this.isRoomOwner = false;
+            this.resetState();
             this.callbacks.onConnectionChange(false);
         });
 
@@ -194,13 +251,29 @@ export class MultiplayerManager {
     }
 
     /**
-     * Cleans up the socket connection.
+     * Cleans up the socket connection and resets all state.
+     *
+     * Should be called when the multiplayer manager is no longer needed
+     * (e.g., when leaving the game scene).
+     *
+     * @returns void
      */
     public destroy(): void {
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
         }
+        this.resetState();
+    }
+
+    /**
+     * Resets the local room state.
+     *
+     * Called when leaving a room, disconnecting, or destroying the manager.
+     *
+     * @returns void
+     */
+    private resetState(): void {
         this.currentRoom = null;
         this.isRoomOwner = false;
     }

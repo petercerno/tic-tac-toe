@@ -102,13 +102,17 @@ npm run start
 
 This builds the client, compiles the server, and starts the Express server serving the static files.
 
+### Server Health
+
+Visit `/health` to view a dashboard with server statistics including active rooms and connected players.
+
 ### Multiplayer
 
 1.  Click the connect button (⚡) in the game HUD
 2.  Enter a room name to create or join a room
 3.  Share the room name with a friend to play together
 4.  Maximum 2 players per room
-5.  Rooms automatically close after inactivity (no moves)
+5.  Rooms automatically close after 10 minutes of inactivity
 
 ### Available Commands
 

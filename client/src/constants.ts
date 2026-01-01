@@ -14,10 +14,12 @@ export const GridConfig = {
     UI_HEIGHT: 70,
     /** Computed top margin (margin + UI height). */
     get TOP_MARGIN() { return this.MARGIN + this.UI_HEIGHT; },
+    /** Computed bottom margin (margin + UI height). */
+    get BOTTOM_MARGIN() { return this.MARGIN + this.UI_HEIGHT; },
     /** Computed total canvas width. */
     get CANVAS_WIDTH() { return this.MARGIN * 2 + this.GRID_SIZE * this.CELL_SIZE; },
     /** Computed total canvas height. */
-    get CANVAS_HEIGHT() { return this.MARGIN + this.TOP_MARGIN + this.GRID_SIZE * this.CELL_SIZE; }
+    get CANVAS_HEIGHT() { return this.BOTTOM_MARGIN + this.TOP_MARGIN + this.GRID_SIZE * this.CELL_SIZE; }
 };
 
 /**
@@ -169,7 +171,7 @@ export const UIConfig = {
     /** Border radius for rounded button corners. */
     BUTTON_BORDER_RADIUS: 8,
     /** Font size for button labels. */
-    BUTTON_TEXT_FONT_SIZE: '16px',
+    BUTTON_TEXT_FONT_SIZE: '22px',
     /** Size (width and height) of all HUD buttons. */
     SMALL_BUTTON_SIZE: 35,
     /** Gap between adjacent small buttons. */

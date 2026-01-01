@@ -10,6 +10,7 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GameRoomManager } from './GameRoomManager.js';
+import { ServerHealth } from './ServerHealth.js';
 
 // ES Module compatibility: __dirname is not available in ESM, so we derive it
 const __filename = fileURLToPath(import.meta.url);
@@ -34,13 +35,9 @@ const distPath = path.join(__dirname, '../../client/dist');
 // Serve static assets (JS, CSS, images) from the client build
 app.use(express.static(distPath));
 
-/**
- * Health check endpoint for monitoring and debugging.
- * Returns server status and current timestamp.
- */
-app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+// Register health check endpoint
+const serverHealth = new ServerHealth(io);
+serverHealth.register(app);
 
 /**
  * SPA fallback: serves index.html for all unmatched routes.

@@ -13,7 +13,7 @@ import {
     type SendStatePayload,
     type StateRequestedPayload,
 } from '../../shared/types.js';
-import { ROOM_NAME_REGEX, MAX_PLAYERS_PER_ROOM, ROOM_INACTIVITY_TIMEOUT_MS } from '../../shared/constants.js';
+import { ROOM_NAME_REGEX, MAX_ROOM_NAME_LENGTH, MAX_PLAYERS_PER_ROOM, ROOM_INACTIVITY_TIMEOUT_MS } from '../../shared/constants.js';
 
 /**
  * Manages Socket.IO connections and room-based multiplayer functionality.
@@ -133,7 +133,7 @@ export class GameRoomManager {
     ): Promise<string | null> {
         try {
             // Validate room name
-            if (!roomName || !ROOM_NAME_REGEX.test(roomName)) {
+            if (!roomName || !ROOM_NAME_REGEX.test(roomName) || roomName.length > MAX_ROOM_NAME_LENGTH) {
                 callback({ success: false, error: 'Invalid room name.' });
                 return currentRoom;
             }

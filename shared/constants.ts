@@ -8,6 +8,11 @@
 export const MAX_PLAYERS_PER_ROOM = 2;
 
 /**
+ * Maximum length of a room name.
+ */
+export const MAX_ROOM_NAME_LENGTH = 20;
+
+/**
  * Regular expression pattern for valid room names.
  * Allows letters, numbers, and hyphens only.
  */

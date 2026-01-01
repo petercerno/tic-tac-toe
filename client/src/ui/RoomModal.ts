@@ -229,7 +229,7 @@ export class RoomModal {
                     type="text" 
                     id="room-name-input" 
                     placeholder="Enter room name..."
-                    maxlength="30"
+                    maxlength="20"
                     autocomplete="off"
                     spellcheck="false"
                 />

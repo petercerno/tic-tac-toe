@@ -108,6 +108,7 @@ This builds the client, compiles the server, and starts the Express server servi
 2.  Enter a room name to create or join a room
 3.  Share the room name with a friend to play together
 4.  Maximum 2 players per room
+5.  Rooms automatically close after inactivity (no moves)
 
 ### Available Commands
 

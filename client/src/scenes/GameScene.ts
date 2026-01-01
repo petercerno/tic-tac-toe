@@ -112,7 +112,8 @@ export default class GameScene extends Phaser.Scene {
             onError: (message) => this.handleMultiplayerError(message),
             onPlayerLeft: () => this.handlePlayerLeft(),
             onPlayerJoined: (playerCount) => this.handlePlayerJoined(playerCount),
-            onStateRequested: (requesterId) => this.handleStateRequested(requesterId)
+            onStateRequested: (requesterId) => this.handleStateRequested(requesterId),
+            onRoomTimeout: () => this.handleRoomTimeout()
         });
 
         this.roomModal = new RoomModal({
@@ -263,6 +264,15 @@ export default class GameScene extends Phaser.Scene {
         if (this.multiplayerManager.isConnected()) {
             this.multiplayerManager.sendStateTo(requesterId, this.gameLogic.getState());
         }
+    }
+
+    /**
+     * Handles when the room times out due to inactivity.
+     * Updates the HUD to reflect disconnected state.
+     */
+    private handleRoomTimeout() {
+        console.log('Room timed out due to inactivity');
+        this.hud.updateConnectionStatus(false);
     }
 
     /**

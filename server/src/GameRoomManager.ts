@@ -13,24 +13,29 @@ import {
     type SendStatePayload,
     type StateRequestedPayload,
 } from '../../shared/types.js';
-import { ROOM_NAME_REGEX, MAX_PLAYERS_PER_ROOM } from '../../shared/constants.js';
+import { ROOM_NAME_REGEX, MAX_PLAYERS_PER_ROOM, ROOM_INACTIVITY_TIMEOUT_MS } from '../../shared/constants.js';
 
 /**
  * Manages Socket.IO connections and room-based multiplayer functionality.
  */
 export class GameRoomManager {
     private io: Server;
+    /** Maps room names to their inactivity timeout handles. */
+    private roomTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
     constructor(io: Server) {
         this.io = io;
     }
 
+    // ==================== Public Methods ====================
+
     /**
      * Initializes the Socket.IO connection handler.
      * Call this after creating the GameRoomManager instance.
      *
-     * Sets up the 'connection' event listener that handles all incoming sockets.
-     * @returns void
+     * Flow:
+     * 1. Registers 'connection' event listener on Socket.IO server
+     * 2. Each new socket connection triggers handleConnection
      */
     public initialize(): void {
         this.io.on('connection', (socket: Socket) => {
@@ -38,36 +43,18 @@ export class GameRoomManager {
         });
     }
 
-    /**
-     * Returns the number of players currently in a room.
-     *
-     * @param roomName - The name of the room to check
-     * @returns The number of sockets in the room (0 if room doesn't exist)
-     */
-    private getRoomPlayerCount(roomName: string): number {
-        const room = this.io.sockets.adapter.rooms.get(roomName);
-        return room ? room.size : 0;
-    }
-
-    /**
-     * Removes a socket from its current room and notifies remaining members.
-     *
-     * @param socket - The socket to remove from the room
-     * @param roomName - The room to leave
-     */
-    private leaveCurrentRoom(socket: Socket, roomName: string): void {
-        socket.to(roomName).emit(SocketEvents.PLAYER_LEFT);
-        socket.leave(roomName);
-    }
+    // ==================== Connection Handling ====================
 
     /**
      * Handles a new socket connection, setting up all event listeners.
      *
-     * Creates a closure over `currentRoom` to track the socket's room membership
-     * and registers handlers for all game events.
+     * Flow:
+     * 1. Socket connects to server
+     * 2. Creates closure over currentRoom to track room membership
+     * 3. Registers handlers for JOIN_ROOM, LEAVE_ROOM, GAME_STATE,
+     *    REQUEST_STATE, SEND_STATE, and disconnect events
      *
      * @param socket - The newly connected socket
-     * @returns void
      */
     private handleConnection(socket: Socket): void {
         console.log(`Client connected: ${socket.id}`);
@@ -103,6 +90,25 @@ export class GameRoomManager {
             this.handleDisconnect(socket, currentRoom);
         });
     }
+
+    /**
+     * Handles socket disconnect event.
+     *
+     * Flow:
+     * 1. Client disconnects (closes browser, network issue, etc.)
+     * 2. Server emits PLAYER_LEFT to remaining room members
+     *
+     * @param socket - The disconnecting socket
+     * @param currentRoom - Room the player was in (null if not in a room)
+     */
+    private handleDisconnect(socket: Socket, currentRoom: string | null): void {
+        console.log(`Client disconnected: ${socket.id}`);
+        if (currentRoom) {
+            socket.to(currentRoom).emit(SocketEvents.PLAYER_LEFT);
+        }
+    }
+
+    // ==================== Room Management ====================
 
     /**
      * Handles JOIN_ROOM event from client.
@@ -156,6 +162,9 @@ export class GameRoomManager {
             const payload: PlayerJoinedPayload = { playerCount: newPlayerCount };
             socket.to(roomName).emit(SocketEvents.PLAYER_JOINED, payload);
 
+            // Start inactivity timeout for this room
+            this.resetRoomTimeout(roomName);
+
             callback({ success: true, isRoomOwner, playerCount: newPlayerCount });
             return roomName;
         } catch (error) {
@@ -193,6 +202,45 @@ export class GameRoomManager {
     }
 
     /**
+     * Removes a socket from its current room and notifies remaining members.
+     *
+     * Flow:
+     * 1. Emits PLAYER_LEFT to remaining room members
+     * 2. Removes socket from room
+     * 3. Clears room timeout if room becomes empty
+     *
+     * @param socket - The socket to remove from the room
+     * @param roomName - The room to leave
+     */
+    private leaveCurrentRoom(socket: Socket, roomName: string): void {
+        socket.to(roomName).emit(SocketEvents.PLAYER_LEFT);
+        socket.leave(roomName);
+
+        // Clear timeout if room is now empty
+        const remainingPlayers = this.getRoomPlayerCount(roomName);
+        if (remainingPlayers === 0) {
+            this.clearRoomTimeout(roomName);
+        }
+    }
+
+    /**
+     * Returns the number of players currently in a room.
+     *
+     * Flow:
+     * 1. Looks up room in Socket.IO adapter
+     * 2. Returns room size or 0 if room doesn't exist
+     *
+     * @param roomName - The name of the room to check
+     * @returns The number of sockets in the room (0 if room doesn't exist)
+     */
+    private getRoomPlayerCount(roomName: string): number {
+        const room = this.io.sockets.adapter.rooms.get(roomName);
+        return room ? room.size : 0;
+    }
+
+    // ==================== Game State Synchronization ====================
+
+    /**
      * Handles GAME_STATE event from client.
      *
      * Flow:
@@ -205,6 +253,8 @@ export class GameRoomManager {
      */
     private handleGameState(socket: Socket, currentRoom: string | null, state: unknown): void {
         if (currentRoom) {
+            // Reset inactivity timeout on any state change
+            this.resetRoomTimeout(currentRoom);
             socket.to(currentRoom).emit(SocketEvents.GAME_STATE, state);
         }
     }
@@ -240,20 +290,82 @@ export class GameRoomManager {
         this.io.to(data.targetId).emit(SocketEvents.GAME_STATE, data.state);
     }
 
+    // ==================== Room Timeout Management ====================
+
     /**
-     * Handles socket disconnect event.
+     * Resets the inactivity timeout for a room.
      *
      * Flow:
-     * 1. Client disconnects (closes browser, network issue, etc.)
-     * 2. Server emits PLAYER_LEFT to remaining room members
+     * 1. Clears any existing timeout for the room
+     * 2. Sets new timeout that calls disconnectRoom after ROOM_INACTIVITY_TIMEOUT_MS
+     * 3. Stores timeout handle in roomTimeouts map
      *
-     * @param socket - The disconnecting socket
-     * @param currentRoom - Room the player was in (null if not in a room)
+     * @param roomName - The room to reset the timeout for
      */
-    private handleDisconnect(socket: Socket, currentRoom: string | null): void {
-        console.log(`Client disconnected: ${socket.id}`);
-        if (currentRoom) {
-            socket.to(currentRoom).emit(SocketEvents.PLAYER_LEFT);
+    private resetRoomTimeout(roomName: string): void {
+        // Clear any existing timeout for this room
+        const existingTimeout = this.roomTimeouts.get(roomName);
+        if (existingTimeout) {
+            clearTimeout(existingTimeout);
         }
+
+        // Set new timeout
+        const timeout = setTimeout(() => {
+            this.disconnectRoom(roomName);
+        }, ROOM_INACTIVITY_TIMEOUT_MS);
+
+        this.roomTimeouts.set(roomName, timeout);
+    }
+
+    /**
+     * Clears the inactivity timeout for a room.
+     *
+     * Flow:
+     * 1. Retrieves timeout handle from roomTimeouts map
+     * 2. Clears the timeout if it exists
+     * 3. Removes entry from roomTimeouts map
+     *
+     * @param roomName - The room to clear the timeout for
+     */
+    private clearRoomTimeout(roomName: string): void {
+        const timeout = this.roomTimeouts.get(roomName);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.roomTimeouts.delete(roomName);
+        }
+    }
+
+    /**
+     * Disconnects all clients in a room due to inactivity.
+     *
+     * Flow:
+     * 1. Looks up room in Socket.IO adapter
+     * 2. Emits ROOM_TIMEOUT to all clients in the room
+     * 3. Disconnects each socket in the room
+     * 4. Removes timeout entry from roomTimeouts map
+     *
+     * @param roomName - The room to disconnect
+     */
+    private disconnectRoom(roomName: string): void {
+        const room = this.io.sockets.adapter.rooms.get(roomName);
+        if (!room) {
+            this.roomTimeouts.delete(roomName);
+            return;
+        }
+
+        console.log(`Room "${roomName}" timed out due to inactivity, disconnecting ${room.size} clients`);
+
+        // Emit timeout event to all clients in the room
+        this.io.to(roomName).emit(SocketEvents.ROOM_TIMEOUT);
+
+        // Disconnect all sockets in the room
+        for (const socketId of room) {
+            const socket = this.io.sockets.sockets.get(socketId);
+            if (socket) {
+                socket.disconnect(true);
+            }
+        }
+
+        this.roomTimeouts.delete(roomName);
     }
 }

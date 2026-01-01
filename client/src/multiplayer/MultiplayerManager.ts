@@ -28,6 +28,8 @@ export interface MultiplayerCallbacks {
      * @param requesterId - Socket ID of the player requesting state (use with sendStateTo)
      */
     onStateRequested: (requesterId: string) => void;
+    /** Called when the room times out due to inactivity. */
+    onRoomTimeout: () => void;
 }
 
 /**
@@ -43,6 +45,8 @@ export class MultiplayerManager {
     constructor(callbacks: MultiplayerCallbacks) {
         this.callbacks = callbacks;
     }
+
+    // ==================== Public Accessors ====================
 
     /**
      * Checks if currently connected to a room.
@@ -70,6 +74,8 @@ export class MultiplayerManager {
     public getIsRoomOwner(): boolean {
         return this.isRoomOwner;
     }
+
+    // ==================== Connection Management ====================
 
     /**
      * Connects to a room. Creates the room if it doesn't exist.
@@ -108,6 +114,74 @@ export class MultiplayerManager {
     }
 
     /**
+     * Disconnects from the current room.
+     *
+     * Flow:
+     * 1. Emits LEAVE_ROOM to server
+     * 2. Server notifies other players via PLAYER_LEFT
+     * 3. Clears local room state and notifies via onConnectionChange callback
+     */
+    public disconnect(): void {
+        if (this.socket && this.currentRoom) {
+            this.socket.emit(SocketEvents.LEAVE_ROOM);
+            this.resetState();
+            this.callbacks.onConnectionChange(false);
+        }
+    }
+
+    /**
+     * Cleans up the socket connection and resets all state.
+     *
+     * Should be called when the multiplayer manager is no longer needed
+     * (e.g., when leaving the game scene).
+     */
+    public destroy(): void {
+        if (this.socket) {
+            this.socket.disconnect();
+            this.socket = null;
+        }
+        this.resetState();
+    }
+
+    // ==================== State Broadcasting ====================
+
+    /**
+     * Broadcasts the current game state to other players in the room.
+     *
+     * Flow:
+     * 1. Client emits GAME_STATE to server
+     * 2. Server relays GAME_STATE to all other players in the room
+     * 3. Other players receive state via onStateReceived callback
+     *
+     * @param state - The complete game state to broadcast
+     */
+    public broadcastState(state: GameState): void {
+        if (this.socket && this.currentRoom) {
+            this.socket.emit(SocketEvents.GAME_STATE, state);
+        }
+    }
+
+    /**
+     * Sends state to a specific player (response to STATE_REQUESTED).
+     *
+     * Flow:
+     * 1. Room owner emits SEND_STATE with target player's socket ID
+     * 2. Server sends GAME_STATE directly to the specified player
+     * 3. Target player receives state via onStateReceived callback
+     *
+     * @param targetId - Socket ID of the player who requested state
+     * @param state - The complete game state to send
+     */
+    public sendStateTo(targetId: string, state: GameState): void {
+        if (this.socket) {
+            const payload: SendStatePayload<GameState> = { targetId, state };
+            this.socket.emit(SocketEvents.SEND_STATE, payload);
+        }
+    }
+
+    // ==================== Private Helpers ====================
+
+    /**
      * Joins a room after socket connection is established.
      *
      * Emits JOIN_ROOM to server and handles the acknowledgment callback.
@@ -116,7 +190,6 @@ export class MultiplayerManager {
      * @param roomName - Room name to join
      * @param resolve - Promise resolve callback for successful join
      * @param reject - Promise reject callback for failed join
-     * @returns void
      */
     private joinRoom(
         roomName: string,
@@ -146,60 +219,6 @@ export class MultiplayerManager {
     }
 
     /**
-     * Disconnects from the current room.
-     *
-     * Flow:
-     * 1. Emits LEAVE_ROOM to server
-     * 2. Server notifies other players via PLAYER_LEFT
-     * 3. Clears local room state and notifies via onConnectionChange callback
-     *
-     * @returns void
-     */
-    public disconnect(): void {
-        if (this.socket && this.currentRoom) {
-            this.socket.emit(SocketEvents.LEAVE_ROOM);
-            this.resetState();
-            this.callbacks.onConnectionChange(false);
-        }
-    }
-
-    /**
-     * Broadcasts the current game state to other players in the room.
-     *
-     * Flow:
-     * 1. Client emits GAME_STATE to server
-     * 2. Server relays GAME_STATE to all other players in the room
-     * 3. Other players receive state via onStateReceived callback
-     *
-     * @param state - The complete game state to broadcast
-     * @returns void
-     */
-    public broadcastState(state: GameState): void {
-        if (this.socket && this.currentRoom) {
-            this.socket.emit(SocketEvents.GAME_STATE, state);
-        }
-    }
-
-    /**
-     * Sends state to a specific player (response to STATE_REQUESTED).
-     *
-     * Flow:
-     * 1. Room owner emits SEND_STATE with target player's socket ID
-     * 2. Server sends GAME_STATE directly to the specified player
-     * 3. Target player receives state via onStateReceived callback
-     *
-     * @param targetId - Socket ID of the player who requested state
-     * @param state - The complete game state to send
-     * @returns void
-     */
-    public sendStateTo(targetId: string, state: GameState): void {
-        if (this.socket) {
-            const payload: SendStatePayload<GameState> = { targetId, state };
-            this.socket.emit(SocketEvents.SEND_STATE, payload);
-        }
-    }
-
-    /**
      * Sets up Socket.IO event listeners for incoming server events.
      *
      * Registers handlers for:
@@ -209,8 +228,6 @@ export class MultiplayerManager {
      * - STATE_REQUESTED: New player needs current game state (owner only)
      * - disconnect: Connection to server lost
      * - connect_error: Connection error occurred
-     *
-     * @returns void
      */
     private setupEventListeners(): void {
         if (!this.socket) return;
@@ -240,6 +257,14 @@ export class MultiplayerManager {
             this.callbacks.onStateRequested(data.requesterId);
         });
 
+        this.socket.on(SocketEvents.ROOM_TIMEOUT, () => {
+            // Clean up socket completely so a fresh connection can be created
+            this.socket?.disconnect();
+            this.socket = null;
+            this.resetState();
+            this.callbacks.onRoomTimeout();
+        });
+
         this.socket.on('disconnect', () => {
             this.resetState();
             this.callbacks.onConnectionChange(false);
@@ -248,22 +273,6 @@ export class MultiplayerManager {
         this.socket.on('connect_error', (error) => {
             this.callbacks.onError(`Connection error: ${error.message}`);
         });
-    }
-
-    /**
-     * Cleans up the socket connection and resets all state.
-     *
-     * Should be called when the multiplayer manager is no longer needed
-     * (e.g., when leaving the game scene).
-     *
-     * @returns void
-     */
-    public destroy(): void {
-        if (this.socket) {
-            this.socket.disconnect();
-            this.socket = null;
-        }
-        this.resetState();
     }
 
     /**

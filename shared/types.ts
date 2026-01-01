@@ -26,6 +26,8 @@ export const SocketEvents = {
     PLAYER_LEFT: 'player-left',
     /** Server → Client: Emitted to room owner when a new player requests game state. */
     STATE_REQUESTED: 'state-requested',
+    /** Server → Client: Emitted to all clients when the room times out due to inactivity. */
+    ROOM_TIMEOUT: 'room-timeout',
 } as const;
 
 /**

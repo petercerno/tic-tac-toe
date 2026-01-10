@@ -8,9 +8,9 @@ A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser
 *   **Fixed 30x30 Grid**: A dedicated battlefield for your strategic 5-in-a-row moves.
 *   **Real-Time Multiplayer**: Connect to rooms and play with friends via WebSocket synchronization.
 *   **Dark/Light Theme Toggle**: Switch between dark and light modes with a single click. Defaults to your system preference.
-*   **Zoom Controls**: Zoom in/out using buttons or keyboard shortcuts.
+*   **Zoom Controls**: Zoom in/out using buttons, keyboard shortcuts, or pinch-to-zoom on touch devices.
 *   **Undo Move**: Take back your last move with the undo button.
-*   **Interactive UI**: Responsive camera controls with drag-to-pan and scroll support.
+*   **Interactive Camera**: Drag-to-pan and scroll/wheel support with zoom-adjusted movement for consistent control feel.
 *   **Keyboard Shortcuts**:
     *   `R` - Restart the game
     *   `Backspace` - Undo the last move

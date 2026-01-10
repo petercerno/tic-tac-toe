@@ -18,6 +18,7 @@ export default class GameScene extends Phaser.Scene {
 
     private isDragging: boolean = false;
     private startDragPoint: Phaser.Math.Vector2 | null = null;
+    private pinchStartDistance: number | null = null;
 
     private gridGraphics!: Phaser.GameObjects.Graphics;
     private graphicsX!: Phaser.GameObjects.Graphics;
@@ -288,18 +289,46 @@ export default class GameScene extends Phaser.Scene {
 
     /**
      * Sets up input handling for the game.
-     * Handles pointer events for camera panning and grid placement.
+     * Handles pointer events for camera panning, pinch-to-zoom, and grid placement.
      */
     private setupInputHandling() {
+        // Enable multi-touch (2 pointers for pinch-to-zoom)
+        this.input.addPointer(1);
+
         this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            this.startDragPoint = new Phaser.Math.Vector2(pointer.x, pointer.y);
-            this.isDragging = false;
+            // Check if this is the start of a pinch gesture (second finger down)
+            const pinchDistance = this.getPinchDistance();
+            if (pinchDistance !== null) {
+                this.pinchStartDistance = pinchDistance;
+                this.isDragging = true; // Prevent click actions during pinch
+            } else {
+                this.startDragPoint = new Phaser.Math.Vector2(pointer.x, pointer.y);
+                this.isDragging = false;
+            }
         });
 
         this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-            if (pointer.isDown && this.startDragPoint) {
-                const scrollX = this.cameras.main.scrollX - (pointer.x - pointer.prevPosition.x);
-                const scrollY = this.cameras.main.scrollY - (pointer.y - pointer.prevPosition.y);
+            // Handle pinch-to-zoom when two fingers are active
+            const pinchDistance = this.getPinchDistance();
+            if (pinchDistance !== null && this.pinchStartDistance !== null) {
+                const zoomFactor = pinchDistance / this.pinchStartDistance;
+                const currentZoom = this.cameras.main.zoom;
+                const newZoom = Phaser.Math.Clamp(
+                    currentZoom * zoomFactor,
+                    GameConfig.ZOOM_MIN,
+                    GameConfig.ZOOM_MAX
+                );
+                this.cameras.main.setZoom(newZoom);
+                this.pinchStartDistance = pinchDistance; // Update for continuous zoom
+                return;
+            }
+
+            // Handle single-finger drag for panning
+            if (pointer.isDown && this.startDragPoint && this.pinchStartDistance === null) {
+                // Divide by zoom to maintain consistent scroll speed regardless of zoom level
+                const zoom = this.cameras.main.zoom;
+                const scrollX = this.cameras.main.scrollX - (pointer.x - pointer.prevPosition.x) / zoom;
+                const scrollY = this.cameras.main.scrollY - (pointer.y - pointer.prevPosition.y) / zoom;
                 this.cameras.main.setScroll(scrollX, scrollY);
 
                 if (this.startDragPoint.distance(pointer.position) > GameConfig.DRAG_THRESHOLD) {
@@ -309,6 +338,18 @@ export default class GameScene extends Phaser.Scene {
         });
 
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+            // Reset pinch state when any finger is lifted
+            if (this.pinchStartDistance !== null) {
+                this.pinchStartDistance = null;
+                // Re-initialize drag point if one finger is still down
+                const activePointer = this.input.pointer1.isDown ? this.input.pointer1 :
+                    this.input.pointer2.isDown ? this.input.pointer2 : null;
+                if (activePointer) {
+                    this.startDragPoint = new Phaser.Math.Vector2(activePointer.x, activePointer.y);
+                }
+                return;
+            }
+
             if (!this.isDragging) {
                 this.handleGridClick(pointer);
             }
@@ -317,8 +358,10 @@ export default class GameScene extends Phaser.Scene {
         });
 
         this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: any, deltaX: number, deltaY: number, _deltaZ: number) => {
-            this.cameras.main.scrollX += deltaX;
-            this.cameras.main.scrollY += deltaY;
+            // Divide by zoom to maintain consistent scroll speed regardless of zoom level
+            const zoom = this.cameras.main.zoom;
+            this.cameras.main.scrollX += deltaX / zoom;
+            this.cameras.main.scrollY += deltaY / zoom;
         });
 
         const restartKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R);
@@ -368,6 +411,22 @@ export default class GameScene extends Phaser.Scene {
         if (this.hud) {
             this.hud.handleResize(gameSize.width, gameSize.height);
         }
+    }
+
+    /**
+     * Calculates the distance between two active pointers (touch points).
+     * @returns The distance in pixels, or null if fewer than 2 pointers are active.
+     */
+    private getPinchDistance(): number | null {
+        const pointer1 = this.input.pointer1;
+        const pointer2 = this.input.pointer2;
+        if (pointer1.isDown && pointer2.isDown) {
+            return Phaser.Math.Distance.Between(
+                pointer1.x, pointer1.y,
+                pointer2.x, pointer2.y
+            );
+        }
+        return null;
     }
 
     // ==================== Rendering ====================

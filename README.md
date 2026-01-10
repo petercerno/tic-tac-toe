@@ -148,7 +148,9 @@ gcloud run deploy tic-tac-toe \
   --source . \
   --region europe-west1 \
   --allow-unauthenticated \
-  --max-instances 1
+  --max-instances 1 \
+  --min-instances 0 \
+  --session-affinity
 ```
 
 The base path can be changed by modifying `BASE_PATH` in `shared/constants.ts`.

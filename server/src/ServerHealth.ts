@@ -7,6 +7,7 @@
 import type { Express } from 'express';
 import type { Server } from 'socket.io';
 import { healthRateLimitMiddleware } from './RateLimiter.js';
+import { HEALTH_PATH } from '../../shared/constants.js';
 
 /**
  * Manages the server health endpoint and statistics display.
@@ -25,7 +26,7 @@ export class ServerHealth {
      * @param app - The Express application instance
      */
     register(app: Express): void {
-        app.get('/health', healthRateLimitMiddleware, (_req, res) => {
+        app.get(HEALTH_PATH, healthRateLimitMiddleware, (_req, res) => {
             const { activeRooms, activePlayers } = this.getStats();
             const html = this.renderHealthPage(activeRooms, activePlayers);
             res.type('html').send(html);

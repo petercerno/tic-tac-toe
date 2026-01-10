@@ -3,14 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "vite client",
-    "build": "tsc -p client/tsconfig.json && vite build client",
-    "preview": "vite preview client",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server:dev\"",
+    "build": "tsc -p client/tsconfig.json && vite build client && tsc -p server/tsconfig.json",
+    "start": "node server/dist/server/src/index.js",
     "server:dev": "tsx watch server/src/index.ts",
-    "server:build": "tsc -p server/tsconfig.json",
-    "start": "npm run build && npm run server:build && node server/dist/index.js",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server:dev\""
+    "preview": "vite preview client"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

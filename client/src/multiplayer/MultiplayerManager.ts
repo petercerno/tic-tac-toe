@@ -94,6 +94,7 @@ export class MultiplayerManager {
             // Create socket connection if not exists
             if (!this.socket) {
                 this.socket = io(MultiplayerConfig.SERVER_URL, {
+                    path: MultiplayerConfig.SOCKET_PATH,
                     transports: ['websocket', 'polling']
                 });
                 this.setupEventListeners();

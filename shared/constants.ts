@@ -61,3 +61,22 @@ export const RATE_LIMITS = {
     /** Health endpoint: 30 requests per 10 seconds */
     HEALTH: { points: 30, duration: 10 },
 } as const;
+
+// ==================== Deployment Configuration ====================
+
+/**
+ * Base path for serving the application.
+ * Used for configuring static file routes, Socket.IO, and health endpoints.
+ */
+export const BASE_PATH = '/tic-tac-toe';
+
+/**
+ * Socket.IO path (derived from BASE_PATH).
+ */
+export const SOCKET_IO_PATH = `${BASE_PATH}/socket.io`;
+
+/**
+ * Health endpoint path (derived from BASE_PATH).
+ */
+export const HEALTH_PATH = `${BASE_PATH}/health`;
+

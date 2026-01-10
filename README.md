@@ -41,7 +41,7 @@ tic-tac-toe/
 │   └── dist/        # Compiled server output
 ├── shared/          # Shared types and constants
 │   ├── types.ts     # Socket event types and payloads
-│   └── constants.ts # Room validation constants
+│   └── constants.ts # Room validation and deployment config
 └── package.json     # Root package with all scripts
 ```
 
@@ -106,7 +106,7 @@ This builds the client, compiles the server, and starts the Express server servi
 
 ### Server Health
 
-Visit `/health` to view a dashboard with server statistics including active rooms and connected players.
+Visit `/tic-tac-toe/health` to view a dashboard with server statistics including active rooms and connected players.
 
 ### Multiplayer
 
@@ -136,3 +136,19 @@ The server includes built-in protection against abuse:
 | `npm run dev` | Start Vite dev server for frontend only |
 | `npm run dev:all` | Run frontend and backend concurrently |
 | `npm run start` | Build and start production server |
+
+## Deployment
+
+The app is configured to be served from the `/tic-tac-toe/` path, enabling multiple games on the same domain.
+
+### Google Cloud Run
+
+```bash
+gcloud run deploy tic-tac-toe \
+  --source . \
+  --region europe-west1 \
+  --allow-unauthenticated \
+  --max-instances 1
+```
+
+The base path can be changed by modifying `BASE_PATH` in `shared/constants.ts`.

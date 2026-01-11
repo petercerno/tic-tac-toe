@@ -23,3 +23,8 @@ server/dist
 *.njsproj
 *.sln
 *.sw?
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log

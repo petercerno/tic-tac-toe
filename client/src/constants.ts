@@ -202,8 +202,8 @@ export const GraphicsConfig = {
  * Configuration for multiplayer functionality.
  */
 export const MultiplayerConfig = {
-    /** WebSocket server URL. Empty string means same origin. */
-    SERVER_URL: '',
+    /** WebSocket server URL. Points directly to Cloud Run for WebSocket support. */
+    SERVER_URL: 'https://tic-tac-toe-428046244270.europe-west1.run.app',
     /** Socket.IO path (from shared constants). */
     SOCKET_PATH: SOCKET_IO_PATH,
     /** Pattern for valid room names (letters, numbers, and hyphens only). */

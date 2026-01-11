@@ -1,0 +1,26 @@
+{
+    "hosting": {
+        "public": "public",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "rewrites": [
+            {
+                "source": "/tic-tac-toe",
+                "run": {
+                    "serviceId": "tic-tac-toe",
+                    "region": "europe-west1"
+                }
+            },
+            {
+                "source": "/tic-tac-toe/**",
+                "run": {
+                    "serviceId": "tic-tac-toe",
+                    "region": "europe-west1"
+                }
+            }
+        ]
+    }
+}

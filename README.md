@@ -143,6 +143,8 @@ The app is configured to be served from the `/tic-tac-toe/` path, enabling multi
 
 ### Google Cloud Run
 
+Deploy the game server to Cloud Run:
+
 ```bash
 gcloud run deploy tic-tac-toe \
   --source . \
@@ -152,5 +154,29 @@ gcloud run deploy tic-tac-toe \
   --min-instances 0 \
   --session-affinity
 ```
+
+### Firebase Hosting (Custom Domain)
+
+Firebase Hosting routes traffic from your custom domain to Cloud Run. The `firebase.json` configuration handles path-based routing:
+
+```json
+{
+  "hosting": {
+    "rewrites": [
+      { "source": "/tic-tac-toe/**", "run": { "serviceId": "tic-tac-toe", "region": "europe-west1" } }
+    ]
+  }
+}
+```
+
+Deploy Firebase Hosting:
+
+```bash
+firebase deploy --only hosting
+```
+
+> **Note**: Firebase Hosting does not proxy WebSocket connections. The client connects directly to Cloud Run for multiplayer (`MultiplayerConfig.SERVER_URL` in `client/src/constants.ts`).
+
+### Configuration
 
 The base path can be changed by modifying `BASE_PATH` in `shared/constants.ts`.

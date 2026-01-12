@@ -42,6 +42,9 @@ tic-tac-toe/
 ├── shared/          # Shared types and constants
 │   ├── types.ts     # Socket event types and payloads
 │   └── constants.ts # Room validation and deployment config
+├── public/          # Firebase Hosting static files
+│   └── index.html   # Landing page (redirects to /tic-tac-toe/)
+├── firebase.json    # Firebase Hosting configuration
 └── package.json     # Root package with all scripts
 ```
 
@@ -62,7 +65,7 @@ tic-tac-toe/
 
 ### Prerequisites
 
-*   Node.js (v18 or higher recommended)
+*   Node.js (v20 or higher)
 *   npm (comes with Node.js)
 
 ### Installation
@@ -99,10 +102,11 @@ npm run dev:all
 Build and start the production server:
 
 ```bash
+npm run build
 npm run start
 ```
 
-This builds the client, compiles the server, and starts the Express server serving the static files.
+This builds the client and server, then starts the Express server serving the static files.
 
 ### Server Health
 
@@ -135,7 +139,9 @@ The server includes built-in protection against abuse:
 |---------|-------------|
 | `npm run dev` | Start Vite dev server for frontend only |
 | `npm run dev:all` | Run frontend and backend concurrently |
-| `npm run start` | Build and start production server |
+| `npm run build` | Build client and server for production |
+| `npm run start` | Start the production server (run `build` first) |
+| `firebase deploy --only hosting` | Deploy Firebase Hosting configuration |
 
 ## Deployment
 

@@ -119,6 +119,7 @@ Visit `/tic-tac-toe/health` to view a dashboard with server statistics including
 3.  Share the room name with a friend to play together
 4.  Maximum 2 players per room
 5.  Rooms automatically close after 10 minutes of inactivity
+6.  Auto-reconnect: If your connection drops (e.g., switching apps on mobile), you'll automatically rejoin the room
 
 ### Security
 

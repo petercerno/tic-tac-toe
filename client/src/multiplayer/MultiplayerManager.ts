@@ -41,6 +41,8 @@ export class MultiplayerManager {
     private callbacks: MultiplayerCallbacks;
     private currentRoom: RoomInfo | null = null;
     private isRoomOwner: boolean = false;
+    /** Room name to rejoin after reconnection. */
+    private pendingRoomName: string | null = null;
 
     constructor(callbacks: MultiplayerCallbacks) {
         this.callbacks = callbacks;
@@ -81,21 +83,33 @@ export class MultiplayerManager {
      * Connects to a room. Creates the room if it doesn't exist.
      *
      * Flow:
-     * 1. Creates socket connection to server (if not already connected)
-     * 2. Emits JOIN_ROOM to server
-     * 3. Server responds with JoinRoomResponse via callback
-     * 4. If not room owner, emits REQUEST_STATE to get current game state
+     * 1. Stores room name for potential auto-reconnection
+     * 2. Creates socket connection to server (if not already connected)
+     * 3. Configures auto-reconnect with exponential backoff (1s-5s, 10 attempts)
+     * 4. Emits JOIN_ROOM to server
+     * 5. Server responds with JoinRoomResponse via callback
+     * 6. If not room owner, emits REQUEST_STATE to get current game state
+     *
+     * Auto-reconnect: If the connection drops (e.g., mobile app backgrounded),
+     * Socket.IO will automatically reconnect and rejoin the room.
      *
      * @param roomName - The name of the room to join
      * @returns Promise that resolves on successful join, rejects on failure
      */
     public async connect(roomName: string): Promise<void> {
+        // Store room name for potential reconnection
+        this.pendingRoomName = roomName;
+
         return new Promise((resolve, reject) => {
             // Create socket connection if not exists
             if (!this.socket) {
                 this.socket = io(MultiplayerConfig.SERVER_URL, {
                     path: MultiplayerConfig.SOCKET_PATH,
-                    transports: ['websocket', 'polling']
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: 10,
+                    reconnectionDelay: 1000,
+                    reconnectionDelayMax: 5000,
                 });
                 this.setupEventListeners();
             }
@@ -125,6 +139,7 @@ export class MultiplayerManager {
     public disconnect(): void {
         if (this.socket && this.currentRoom) {
             this.socket.emit(SocketEvents.LEAVE_ROOM);
+            this.pendingRoomName = null; // Clear pending room to prevent auto-rejoin
             this.resetState();
             this.callbacks.onConnectionChange(false);
         }
@@ -137,6 +152,7 @@ export class MultiplayerManager {
      * (e.g., when leaving the game scene).
      */
     public destroy(): void {
+        this.pendingRoomName = null; // Clear pending room to prevent auto-rejoin
         if (this.socket) {
             this.socket.disconnect();
             this.socket = null;
@@ -266,7 +282,28 @@ export class MultiplayerManager {
             this.callbacks.onRoomTimeout();
         });
 
-        this.socket.on('disconnect', () => {
+        // Handle reconnection - rejoin room if we had one
+        this.socket.on('connect', () => {
+            if (this.pendingRoomName && !this.currentRoom) {
+                // Auto-rejoin the room after reconnection
+                this.joinRoom(
+                    this.pendingRoomName,
+                    () => console.log(`Rejoined room: ${this.pendingRoomName}`),
+                    (error) => {
+                        console.error('Failed to rejoin room:', error);
+                        this.pendingRoomName = null;
+                        this.callbacks.onConnectionChange(false);
+                    }
+                );
+            }
+        });
+
+        this.socket.on('disconnect', (reason) => {
+            // Only fully reset if it's a deliberate disconnect or server-initiated
+            // For transport issues, keep pendingRoomName for auto-rejoin
+            if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+                this.pendingRoomName = null;
+            }
             this.resetState();
             this.callbacks.onConnectionChange(false);
         });

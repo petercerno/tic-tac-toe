@@ -27,11 +27,14 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const httpServer = createServer(app);
 
-// Initialize Socket.IO with CORS configuration
+// Initialize Socket.IO with CORS and timeout configuration.
 // In production, client is served from the same origin, so we allow all same-origin requests.
 // In development, we explicitly allow the Vite dev server and local server origins.
+// Timeout settings are lenient to handle backgrounded tabs and mobile devices.
 const io = new Server(httpServer, {
     path: SOCKET_IO_PATH,
+    pingInterval: 25000, // How often to ping clients (25 seconds)
+    pingTimeout: 60000,  // How long to wait for pong before disconnecting (60 seconds)
     cors: {
         origin: process.env.NODE_ENV === 'production'
             ? true

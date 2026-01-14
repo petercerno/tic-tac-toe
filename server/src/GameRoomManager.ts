@@ -239,6 +239,7 @@ export class GameRoomManager {
 
         // Reset inactivity timeout on any state change
         this.resetRoomTimeout(currentRoom);
+
         socket.to(currentRoom).emit(SocketEvents.GAME_STATE, state);
     }
 
@@ -261,6 +262,9 @@ export class GameRoomManager {
             console.log(`Rate limited REQUEST_STATE from ${socket.id}`);
             return;
         }
+
+        // Reset inactivity timeout on state request
+        this.resetRoomTimeout(currentRoom);
 
         const payload: StateRequestedPayload = { requesterId: socket.id };
         socket.to(currentRoom).emit(SocketEvents.STATE_REQUESTED, payload);
@@ -304,6 +308,9 @@ export class GameRoomManager {
             console.log(`Rejected oversized SEND_STATE from ${socket.id}`);
             return;
         }
+
+        // Reset inactivity timeout on state send
+        this.resetRoomTimeout(currentRoom);
 
         this.io.to(data.targetId).emit(SocketEvents.GAME_STATE, data.state);
     }

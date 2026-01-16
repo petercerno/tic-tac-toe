@@ -33,7 +33,9 @@ const parseColor = (color: string) => parseInt(color.replace('#', '0x'), 16);
 const DARK_COLORS = {
     GAME_BG: '#333333',
     PLAYER_X: '#ffff00',
+    PLAYER_X_INTENSE: '#ffff99',
     PLAYER_O: '#00ffff',
+    PLAYER_O_INTENSE: '#99ffff',
     WIN: '#00ff00',
     UI_BG: '#000000',
     BUTTON_BG: '#444444',
@@ -48,7 +50,9 @@ const DARK_COLORS = {
 const LIGHT_COLORS = {
     GAME_BG: '#e0e0e0',
     PLAYER_X: '#800000',
+    PLAYER_X_INTENSE: '#400000',
     PLAYER_O: '#00008b',
+    PLAYER_O_INTENSE: '#000050',
     WIN: '#009900',
     UI_BG: '#ffffff',
     BUTTON_BG: '#cccccc',
@@ -73,7 +77,9 @@ export const isDarkMode = () => _isDarkMode;
 const updateColorConfig = (palette: typeof DARK_COLORS) => {
     ColorConfig.GAME_BG_STR = palette.GAME_BG;
     ColorConfig.PLAYER_X_STR = palette.PLAYER_X;
+    ColorConfig.PLAYER_X_INTENSE_STR = palette.PLAYER_X_INTENSE;
     ColorConfig.PLAYER_O_STR = palette.PLAYER_O;
+    ColorConfig.PLAYER_O_INTENSE_STR = palette.PLAYER_O_INTENSE;
     ColorConfig.WIN_STR = palette.WIN;
     ColorConfig.UI_BG_STR = palette.UI_BG;
     ColorConfig.BUTTON_BG_STR = palette.BUTTON_BG;
@@ -83,7 +89,9 @@ const updateColorConfig = (palette: typeof DARK_COLORS) => {
 
     ColorConfig.GAME_BG = parseColor(palette.GAME_BG);
     ColorConfig.PLAYER_X = parseColor(palette.PLAYER_X);
+    ColorConfig.PLAYER_X_INTENSE = parseColor(palette.PLAYER_X_INTENSE);
     ColorConfig.PLAYER_O = parseColor(palette.PLAYER_O);
+    ColorConfig.PLAYER_O_INTENSE = parseColor(palette.PLAYER_O_INTENSE);
     ColorConfig.WIN = parseColor(palette.WIN);
     ColorConfig.UI_BG = parseColor(palette.UI_BG);
     ColorConfig.BUTTON_BG = parseColor(palette.BUTTON_BG);
@@ -122,7 +130,9 @@ export const toggleTheme = () => {
 export const ColorConfig = {
     GAME_BG_STR: '',
     PLAYER_X_STR: '',
+    PLAYER_X_INTENSE_STR: '',
     PLAYER_O_STR: '',
+    PLAYER_O_INTENSE_STR: '',
     WIN_STR: '',
     UI_BG_STR: '',
     BUTTON_BG_STR: '',
@@ -132,7 +142,9 @@ export const ColorConfig = {
 
     GAME_BG: 0,
     PLAYER_X: 0,
+    PLAYER_X_INTENSE: 0,
     PLAYER_O: 0,
+    PLAYER_O_INTENSE: 0,
     WIN: 0,
     UI_BG: 0,
     BUTTON_BG: 0,
@@ -186,6 +198,8 @@ export const GraphicsConfig = {
     GRID_LINE_WIDTH: 2,
     /** Stroke width for X and O symbols. */
     SYMBOL_LINE_WIDTH: 3,
+    /** Stroke width for the last-placed symbol (slightly thicker for emphasis). */
+    SYMBOL_LINE_WIDTH_INTENSE: 5,
     /** Half-size of the X symbol (distance from center to line end). */
     SYMBOL_X_SIZE: 10,
     /** Radius of the O symbol circle. */

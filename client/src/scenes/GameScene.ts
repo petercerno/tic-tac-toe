@@ -23,6 +23,7 @@ export default class GameScene extends Phaser.Scene {
     private gridGraphics!: Phaser.GameObjects.Graphics;
     private graphicsX!: Phaser.GameObjects.Graphics;
     private graphicsO!: Phaser.GameObjects.Graphics;
+    private graphicsLastMove!: Phaser.GameObjects.Graphics;
     private winLineGraphics!: Phaser.GameObjects.Graphics;
 
     private hud!: GameHUD;
@@ -65,6 +66,7 @@ export default class GameScene extends Phaser.Scene {
         this.gridGraphics = this.add.graphics();
         this.graphicsX = this.add.graphics();
         this.graphicsO = this.add.graphics();
+        this.graphicsLastMove = this.add.graphics();
         this.winLineGraphics = this.add.graphics();
         this.drawGridLines();
     }
@@ -439,9 +441,12 @@ export default class GameScene extends Phaser.Scene {
         // Redraw all symbols from move history
         this.graphicsX.clear();
         this.graphicsO.clear();
-        for (const move of this.gameLogic.getMoveHistory()) {
-            this.drawSymbol(move.position, move.player);
-        }
+        this.graphicsLastMove.clear();
+        const moveHistory = this.gameLogic.getMoveHistory();
+        const lastIndex = moveHistory.length - 1;
+        moveHistory.forEach((move, index) => {
+            this.drawSymbol(move.position, move.player, index === lastIndex);
+        });
 
         // Redraw winning line if game is won, clear otherwise
         const winResult = this.gameLogic.getWinResult();
@@ -480,20 +485,29 @@ export default class GameScene extends Phaser.Scene {
      * Draws the player's symbol (X or O) at the specified grid coordinates.
      * @param position The grid position to draw at.
      * @param player The player symbol ('X' or 'O').
+     * @param isLastMove Whether this is the last move (uses dedicated graphics with intense styling).
      */
-    private drawSymbol(position: GridPosition, player: Player) {
+    private drawSymbol(position: GridPosition, player: Player, isLastMove: boolean = false) {
         const center = this.gridToWorld(position);
 
+        // Select graphics object, color, and line width based on move type
+        const graphics = isLastMove ? this.graphicsLastMove :
+            (player === 'X' ? this.graphicsX : this.graphicsO);
+        const color = isLastMove ?
+            (player === 'X' ? ColorConfig.PLAYER_X_INTENSE : ColorConfig.PLAYER_O_INTENSE) :
+            (player === 'X' ? ColorConfig.PLAYER_X : ColorConfig.PLAYER_O);
+        const lineWidth = isLastMove ? GraphicsConfig.SYMBOL_LINE_WIDTH_INTENSE : GraphicsConfig.SYMBOL_LINE_WIDTH;
+
+        graphics.lineStyle(lineWidth, color, 1);
+
         if (player === 'X') {
-            this.graphicsX.lineStyle(GraphicsConfig.SYMBOL_LINE_WIDTH, ColorConfig.PLAYER_X, 1);
-            this.graphicsX.moveTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.lineTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.moveTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.lineTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
-            this.graphicsX.strokePath();
+            graphics.moveTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
+            graphics.lineTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
+            graphics.moveTo(center.x + GraphicsConfig.SYMBOL_X_SIZE, center.y - GraphicsConfig.SYMBOL_X_SIZE);
+            graphics.lineTo(center.x - GraphicsConfig.SYMBOL_X_SIZE, center.y + GraphicsConfig.SYMBOL_X_SIZE);
+            graphics.strokePath();
         } else {
-            this.graphicsO.lineStyle(GraphicsConfig.SYMBOL_LINE_WIDTH, ColorConfig.PLAYER_O, 1);
-            this.graphicsO.strokeCircle(center.x, center.y, GraphicsConfig.SYMBOL_O_RADIUS);
+            graphics.strokeCircle(center.x, center.y, GraphicsConfig.SYMBOL_O_RADIUS);
         }
     }
 

@@ -2,7 +2,7 @@
 
 A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser 3, TypeScript, Vite, Node.js, Express, and Socket.IO for real-time multiplayer.
 
-You can play the game for free here: https://vibephase.web.app/tic-tac-toe/
+You can play the game for free here: https://vibephase.net/tic-tac-toe/
 
 ## Features
 

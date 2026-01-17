@@ -97,9 +97,6 @@ export class MultiplayerManager {
      * @returns Promise that resolves on successful join, rejects on failure
      */
     public async connect(roomName: string): Promise<void> {
-        // Store room name for potential reconnection
-        this.pendingRoomName = roomName;
-
         return new Promise((resolve, reject) => {
             // Create socket connection if not exists
             if (!this.socket) {
@@ -215,6 +212,7 @@ export class MultiplayerManager {
     ): void {
         this.socket!.emit(SocketEvents.JOIN_ROOM, roomName, (response: JoinRoomResponse) => {
             if (response.success) {
+                this.pendingRoomName = roomName; // Store for potential reconnection
                 this.isRoomOwner = response.isRoomOwner ?? false;
                 this.currentRoom = {
                     roomName,

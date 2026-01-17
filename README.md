@@ -2,6 +2,8 @@
 
 A modern Tic-Tac-Toe game where the goal is to get 5 in a row. Built with Phaser 3, TypeScript, Vite, Node.js, Express, and Socket.IO for real-time multiplayer.
 
+You can play the game for free here: https://vibephase.web.app/tic-tac-toe/
+
 ## Features
 
 *   **5-in-a-row Victory Condition**: Traditional Xs and Os, but you need 5 contiguous symbols to win.
@@ -183,7 +185,3 @@ firebase deploy --only hosting
 ```
 
 > **Note**: Firebase Hosting does not proxy WebSocket connections. The client connects directly to Cloud Run for multiplayer (`MultiplayerConfig.SERVER_URL` in `client/src/constants.ts`).
-
-### Configuration
-
-The base path can be changed by modifying `BASE_PATH` in `shared/constants.ts`.

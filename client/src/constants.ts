@@ -215,9 +215,24 @@ export const GraphicsConfig = {
 /**
  * Configuration for multiplayer functionality.
  */
+/**
+ * Determines the WebSocket server URL based on the current hostname.
+ * Returns empty string for localhost (same-origin connection), Cloud Run URL otherwise.
+ */
+const getServerUrl = (): string => {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return ''; // Empty string = same origin (works for both dev and local prod)
+    }
+    return 'https://tic-tac-toe-428046244270.europe-west1.run.app';
+};
+
+/**
+ * Configuration for multiplayer functionality.
+ */
 export const MultiplayerConfig = {
-    /** WebSocket server URL. Points directly to Cloud Run for WebSocket support. */
-    SERVER_URL: 'https://tic-tac-toe-428046244270.europe-west1.run.app',
+    /** WebSocket server URL. Uses same-origin for localhost, Cloud Run for production. */
+    get SERVER_URL() { return getServerUrl(); },
     /** Socket.IO path (from shared constants). */
     SOCKET_PATH: SOCKET_IO_PATH,
     /** Pattern for valid room names (letters, numbers, and hyphens only). */

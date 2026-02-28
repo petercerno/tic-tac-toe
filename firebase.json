@@ -20,6 +20,20 @@
                     "serviceId": "tic-tac-toe",
                     "region": "europe-west1"
                 }
+            },
+            {
+                "source": "/corridor",
+                "run": {
+                    "serviceId": "corridor",
+                    "region": "europe-west1"
+                }
+            },
+            {
+                "source": "/corridor/**",
+                "run": {
+                    "serviceId": "corridor",
+                    "region": "europe-west1"
+                }
             }
         ]
     }

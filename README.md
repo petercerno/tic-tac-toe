@@ -44,9 +44,6 @@ tic-tac-toe/
 ├── shared/          # Shared types and constants
 │   ├── types.ts     # Socket event types and payloads
 │   └── constants.ts # Room validation and deployment config
-├── public/          # Firebase Hosting static files
-│   └── index.html   # Landing page (redirects to /tic-tac-toe/)
-├── firebase.json    # Firebase Hosting configuration
 └── package.json     # Root package with all scripts
 ```
 
@@ -144,7 +141,7 @@ The server includes built-in protection against abuse:
 | `npm run dev:all` | Run frontend and backend concurrently |
 | `npm run build` | Build client and server for production |
 | `npm run start` | Start the production server (run `build` first) |
-| `firebase deploy --only hosting` | Deploy Firebase Hosting configuration |
+
 
 ## Deployment
 
@@ -162,26 +159,6 @@ gcloud run deploy tic-tac-toe \
   --max-instances 1 \
   --min-instances 0 \
   --session-affinity
-```
-
-### Firebase Hosting (Custom Domain)
-
-Firebase Hosting routes traffic from your custom domain to Cloud Run. The `firebase.json` configuration handles path-based routing:
-
-```json
-{
-  "hosting": {
-    "rewrites": [
-      { "source": "/tic-tac-toe/**", "run": { "serviceId": "tic-tac-toe", "region": "europe-west1" } }
-    ]
-  }
-}
-```
-
-Deploy Firebase Hosting:
-
-```bash
-firebase deploy --only hosting
 ```
 
 > **Note**: Firebase Hosting does not proxy WebSocket connections. The client connects directly to Cloud Run for multiplayer (`MultiplayerConfig.SERVER_URL` in `client/src/constants.ts`).
